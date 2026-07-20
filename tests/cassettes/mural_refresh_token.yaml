@@ -1,0 +1,30 @@
+interactions:
+- request:
+    body: grant_type=refresh_token&refresh_token=refresh_token_123&client_id=test_client_id&client_secret=[FILTERED]
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      content-length:
+      - '108'
+      content-type:
+      - application/x-www-form-urlencoded
+      host:
+      - app.mural.co
+      user-agent:
+      - python-httpx/0.28.1
+    method: POST
+    uri: https://app.mural.co/api/public/v1/authorization/oauth2/token
+  response:
+    body:
+      string: '{"access_token":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLTEyMyIsImlhdCI6MTc3NTk1MDEwMCwiZXhwIjoxNzc1OTUzNzAwfQ.new_fake_signature","refresh_token":"refresh_token_123","token_type":"Bearer","expires_in":3600}'
+    headers:
+      content-type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+version: 1

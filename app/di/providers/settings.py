@@ -1,0 +1,15 @@
+import dishka
+
+from app import config as app_config
+
+
+class SettingsProvider(dishka.Provider):
+    @dishka.provide(scope=dishka.Scope.APP)
+    def provide_app_config(self) -> app_config.AppConfig:
+        return app_config.AppConfig()  # type: ignore[call-arg]
+
+    @dishka.provide(scope=dishka.Scope.APP)
+    def provide_mural_config(
+        self, config: app_config.AppConfig
+    ) -> app_config.MuralConfig:
+        return config.mural_config
