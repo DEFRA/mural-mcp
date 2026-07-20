@@ -39,5 +39,5 @@ jobs:
       - name: Test Docker Image Build
         run: |
           set +e
-          docker build --no-cache --tag ai-uc-rpa-guidance .
+          docker build --no-cache --tag mural-mcp .
           exit $?
