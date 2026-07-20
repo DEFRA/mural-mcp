@@ -13,7 +13,7 @@ router = fastapi.APIRouter()
 async def get_board_summary(
     mural_id: str,
     user_id: str = fastapi.Depends(auth_deps.get_current_user),
-    board: dishka_fastapi.FromDishka[board_service_module.BoardService] = ...,
+    board: dishka_fastapi.FromDishka[board_service_module.BoardService] = ...,  # type: ignore[assignment]
     use_spatial_grouping: bool = False,
 ) -> str:
     """Return a compact MSX summary of the board's top-level regions."""
@@ -29,7 +29,7 @@ async def get_board_region(
     mural_id: str,
     region_id: str,
     user_id: str = fastapi.Depends(auth_deps.get_current_user),
-    board: dishka_fastapi.FromDishka[board_service_module.BoardService] = ...,
+    board: dishka_fastapi.FromDishka[board_service_module.BoardService] = ...,  # type: ignore[assignment]
     use_spatial_grouping: bool = False,
 ) -> str:
     """Return full MSX for all widgets within a board region."""
@@ -47,7 +47,7 @@ async def get_widget_connections(
     mural_id: str,
     widget_id: str,
     user_id: str = fastapi.Depends(auth_deps.get_current_user),
-    board: dishka_fastapi.FromDishka[board_service_module.BoardService] = ...,
+    board: dishka_fastapi.FromDishka[board_service_module.BoardService] = ...,  # type: ignore[assignment]
 ) -> str:
     """Return all arrows connected to a widget and their resolved endpoints."""
     try:
@@ -61,7 +61,7 @@ async def get_widget_connections(
 async def find_board_widgets(
     mural_id: str,
     user_id: str = fastapi.Depends(auth_deps.get_current_user),
-    board: dishka_fastapi.FromDishka[board_service_module.BoardService] = ...,
+    board: dishka_fastapi.FromDishka[board_service_module.BoardService] = ...,  # type: ignore[assignment]
     query: str | None = None,
     widget_type: str | None = None,
 ) -> str:

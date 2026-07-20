@@ -16,8 +16,10 @@ async def test_store_tokens() -> None:
     mock_collection.replace_one.assert_awaited_once()
     args = mock_collection.replace_one.await_args
     assert args[0][0] == {"user_id": "user-123"}
+    assert args[0][1] == {
+        "$set": {"user_id": "user-123", "access_token": "test", "refresh_token": "test"}
+    }
     assert args[1]["upsert"] is True
-    assert args[1]["replacement"] == {"access_token": "test", "refresh_token": "test"}
 
 
 @pytest.mark.asyncio

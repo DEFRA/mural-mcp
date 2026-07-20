@@ -9,5 +9,6 @@ class FakeOAuthClient:
 
     async def get_valid_token(self, user_id: str) -> str:  # noqa: ARG002
         if self._token is None:
-            raise exceptions.MuralTokenError(f"No Mural token for user {user_id}")
+            msg = f"No Mural token for user {user_id}"
+            raise exceptions.MuralTokenError(msg)
         return self._token

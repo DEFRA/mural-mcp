@@ -10,8 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 def _create_ssl_context() -> ssl.SSLContext:
-    ctx = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    return ctx
+    return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 
 
 async def async_hook_request_tracing(request: httpx.Request) -> None:

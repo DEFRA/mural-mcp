@@ -52,7 +52,7 @@ async def disconnect_mural(
 @dishka_inject.inject
 async def get_board_summary(
     mural_id: str,
-    ctx: fastmcp.Context,
+    _ctx: fastmcp.Context,
     board: dishka.FromDishka[board_service_module.BoardService],
     user_id: str = fastmcp_deps.TokenClaim("email"),
     use_spatial_grouping: bool = False,
@@ -60,15 +60,15 @@ async def get_board_summary(
     """Return a compact summary of the board's top-level regions with labels, widget counts, and bounds."""
     try:
         return await board.fetch_summary(user_id, mural_id, use_spatial_grouping)
-    except exceptions.MuralTokenError:
-        raise _mural_token_error()
+    except exceptions.MuralTokenError as err:
+        raise _mural_token_error() from err
 
 
 @dishka_inject.inject
 async def get_region(
     mural_id: str,
     region_id: str,
-    ctx: fastmcp.Context,
+    _ctx: fastmcp.Context,
     board: dishka.FromDishka[board_service_module.BoardService],
     user_id: str = fastmcp_deps.TokenClaim("email"),
     use_spatial_grouping: bool = False,
@@ -78,29 +78,29 @@ async def get_region(
         return await board.fetch_region(
             user_id, mural_id, region_id, use_spatial_grouping
         )
-    except exceptions.MuralTokenError:
-        raise _mural_token_error()
+    except exceptions.MuralTokenError as err:
+        raise _mural_token_error() from err
 
 
 @dishka_inject.inject
 async def get_connections(
     mural_id: str,
     widget_id: str,
-    ctx: fastmcp.Context,
+    _ctx: fastmcp.Context,
     board: dishka.FromDishka[board_service_module.BoardService],
     user_id: str = fastmcp_deps.TokenClaim("email"),
 ) -> str:
     """Return all arrows connected to a widget and their resolved endpoints."""
     try:
         return await board.fetch_connections(user_id, mural_id, widget_id)
-    except exceptions.MuralTokenError:
-        raise _mural_token_error()
+    except exceptions.MuralTokenError as err:
+        raise _mural_token_error() from err
 
 
 @dishka_inject.inject
 async def find_widgets(
     mural_id: str,
-    ctx: fastmcp.Context,
+    _ctx: fastmcp.Context,
     board: dishka.FromDishka[board_service_module.BoardService],
     user_id: str = fastmcp_deps.TokenClaim("email"),
     query: str | None = None,
@@ -115,8 +115,8 @@ async def find_widgets(
 
     try:
         return await board.search_widgets(user_id, mural_id, query, widget_type)
-    except exceptions.MuralTokenError:
-        raise _mural_token_error()
+    except exceptions.MuralTokenError as err:
+        raise _mural_token_error() from err
 
 
 def register_tools(mcp_app: fastmcp.FastMCP) -> None:

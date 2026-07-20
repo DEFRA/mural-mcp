@@ -1,6 +1,8 @@
+import datetime
 import urllib.parse
 
 import httpx
+import jwt
 
 from app import config as app_config
 from app.mural.connectivity import exceptions, models, ports
@@ -94,18 +96,18 @@ class OAuthClient:
         token = await self._tokens.get_tokens(user_id)
 
         if token is None:
-            raise exceptions.MuralTokenError(f"No Mural token for user {user_id}")
+            msg = f"No Mural token for user {user_id}"
+            raise exceptions.MuralTokenError(msg)
 
-        # try:
-        #     jwt.decode(
-        #         token.access_token,
-        #         options={"verify_signature": False, "verify_exp": True},
-        #         algorithms=["RS256"],
-        #         leeway=datetime.timedelta(seconds=60),
-        #     )
-        # except jwt.ExpiredSignatureError:
-        #     token = await self.refresh(token.refresh_token)
-
-        #     await self._tokens.store_tokens(user_id, token)
+        try:
+            jwt.decode(
+                token.access_token,
+                options={"verify_signature": False, "verify_exp": True},
+                algorithms=["RS256"],
+                leeway=datetime.timedelta(seconds=60),
+            )
+        except jwt.ExpiredSignatureError:
+            token = await self.refresh(token.refresh_token)
+            await self._tokens.store_tokens(user_id, token)
 
         return token.access_token

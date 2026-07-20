@@ -10,7 +10,9 @@ class MongoTokenStore(ports.TokenStore):
     async def store_tokens(self, user_id: str, token: models.MuralToken) -> None:
         doc = {"user_id": user_id, **token.model_dump()}
 
-        await self._collection.replace_one({"user_id": user_id}, doc, upsert=True)
+        await self._collection.replace_one(
+            {"user_id": user_id}, {"$set": doc}, upsert=True
+        )
 
     async def get_tokens(self, user_id: str) -> models.MuralToken | None:
         doc = await self._collection.find_one({"user_id": user_id}, {"_id": 0})
