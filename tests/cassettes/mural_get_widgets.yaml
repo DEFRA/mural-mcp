@@ -1,0 +1,50 @@
+interactions:
+- request:
+    body: null
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      host:
+      - app.mural.co
+      user-agent:
+      - python-httpx/0.28.1
+    method: GET
+    uri: https://app.mural.co/api/public/v1/murals/test-mural-id/widgets
+  response:
+    body:
+      string: '{"value":[{"id":"0-1775856415592","type":"sticky note","title":"","parentId":null,"x":155.04,"y":123.31,"width":539,"height":320.6,"rotation":0,"stackingOrder":8,"presentationIndex":-1,"instruction":"","hidden":false,"hideEditor":false,"hideOwner":false,"invisible":false,"locked":false,"lockedByFacilitator":false,"createdBy":{"id":"u476aa2a0d80635fe9ebd6562","firstName":"Test","lastName":"User"},"createdOn":1775856416806,"updatedBy":{"id":"u476aa2a0d80635fe9ebd6562","firstName":"Test","lastName":"User"},"updatedOn":1775856416806,"contentEditedBy":{"id":"u476aa2a0d80635fe9ebd6562","firstName":"Test","lastName":"User"},"contentEditedOn":1775856416806,"shape":"rectangle","style":{"backgroundColor":"#FFFFFFFF","bold":false,"border":false,"font":"proxima-nova","fontSize":23,"italic":false,"strike":false,"textAlign":"center","underline":false},"text":"Test note"},{"id":"1-1775856415592","type":"shape","title":"Shape","parentId":null,"x":156.21,"y":123.31,"width":539,"height":320.6,"rotation":0,"stackingOrder":7,"presentationIndex":-1,"instruction":"","hidden":false,"hideEditor":false,"hideOwner":false,"invisible":false,"locked":false,"lockedByFacilitator":false,"createdBy":{"id":"u476aa2a0d80635fe9ebd6562","firstName":"Test","lastName":"User"},"createdOn":1775856416806,"updatedBy":{"id":"u476aa2a0d80635fe9ebd6562","firstName":"Test","lastName":"User"},"updatedOn":1775856416806,"contentEditedBy":{"id":"u476aa2a0d80635fe9ebd6562","firstName":"Test","lastName":"User"},"contentEditedOn":1775856416806,"shape":"process","text":"Test Shape","style":{"backgroundColor":"#FFFFFFFF","bold":true,"borderColor":"#0F766EFF","borderStyle":"solid","borderWidth":7,"font":"proxima-nova","fontColor":"#0F766EFF","fontSize":60,"italic":false,"strike":false,"textAlign":"center","underline":false}},{"id":"2-1775856415592","type":"icon","title":"Icon","name":"1240616","parentId":null,"x":374.4,"y":183.3,"width":113.6,"height":113.6,"rotation":0,"stackingOrder":28,"presentationIndex":-1,"instruction":"","hidden":false,"hideEditor":false,"hideOwner":false,"invisible":false,"locked":false,"lockedByFacilitator":false,"createdBy":{"id":"u476aa2a0d80635fe9ebd6562","firstName":"Test","lastName":"User"},"createdOn":1775856416806,"updatedBy":{"id":"u476aa2a0d80635fe9ebd6562","firstName":"Test","lastName":"User"},"updatedOn":1775856416806,"contentEditedBy":{"id":"u75629feb1ed7e0d34bba6036"},"contentEditedOn":1691002321848,"style":{"color":"#BE1A64FF"}},{"id":"3-1775856415592","type":"text","title":"","parentId":null,"x":91.36,"y":17.75,"width":232,"height":40.6,"rotation":0,"stackingOrder":29,"presentationIndex":-1,"instruction":"","hidden":false,"hideEditor":false,"hideOwner":false,"invisible":false,"locked":false,"lockedByFacilitator":false,"createdBy":{"id":"u476aa2a0d80635fe9ebd6562","firstName":"Test","lastName":"User"},"createdOn":1775856416806,"updatedBy":{"id":"u476aa2a0d80635fe9ebd6562","firstName":"Test","lastName":"User"},"updatedOn":1775856416806,"contentEditedBy":{"id":"u476aa2a0d80635fe9ebd6562","firstName":"Test","lastName":"User"},"contentEditedOn":1775856416806,"fixedWidth":false,"style":{"backgroundColor":"#FFFFFF00","font":"proxima-nova","fontSize":32.36,"textAlign":"left"},"text":"<div><span>Example text</span></div>"},{"id":"4-1775856415592","type":"area","title":"Container","parentId":null,"x":473.1,"y":2608.25,"width":345,"height":79,"rotation":0,"stackingOrder":30,"presentationIndex":-1,"instruction":"","hidden":false,"hideEditor":false,"hideOwner":false,"invisible":false,"locked":false,"lockedByFacilitator":false,"createdBy":{"id":"u476aa2a0d80635fe9ebd6562","firstName":"Test","lastName":"User"},"createdOn":1775856416806,"updatedBy":{"id":"u476aa2a0d80635fe9ebd6562","firstName":"Test","lastName":"User"},"updatedOn":1775856416806,"contentEditedBy":{"id":"u476aa2a0d80635fe9ebd6562","firstName":"Test","lastName":"User"},"contentEditedOn":1775856416806,"layout":"free","showTitle":false,"style":{"backgroundColor":"#FFFFFF33","borderColor":"#EAEAEAFF","borderStyle":"solid","borderWidth":3,"titleFontSize":36}}],"next":"https://app.mural.co/api/public/v1/murals/test-mural-id/widgets?next=page2token"}'
+    headers:
+      content-type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+- request:
+    body: null
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      connection:
+      - keep-alive
+      host:
+      - app.mural.co
+      user-agent:
+      - python-httpx/0.28.1
+    method: GET
+    uri: https://app.mural.co/api/public/v1/murals/test-mural-id/widgets?next=page2token
+  response:
+    body:
+      string: '{"value":[{"id":"5-1775856415592","type":"comment","title":"Page2Comment","parentId":null,"x":100,"y":200,"width":40,"height":40,"rotation":0,"stackingOrder":31,"presentationIndex":-1,"instruction":"","hidden":false,"hideEditor":false,"hideOwner":false,"invisible":false,"locked":false,"lockedByFacilitator":false,"createdBy":{"id":"u476aa2a0d80635fe9ebd6562","firstName":"Test","lastName":"User"},"createdOn":1775856416806,"updatedBy":{"id":"u476aa2a0d80635fe9ebd6562","firstName":"Test","lastName":"User"},"updatedOn":1775856416806,"contentEditedBy":{"id":"u476aa2a0d80635fe9ebd6562","firstName":"Test","lastName":"User"},"contentEditedOn":1775856416806,"message":"A comment on page 2","replies":[]}]}'
+    headers:
+      content-type:
+      - application/json
+    status:
+      code: 200
+      message: OK
+version: 1
