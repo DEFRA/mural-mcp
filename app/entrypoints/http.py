@@ -12,6 +12,7 @@ from app.di import container as di_container
 from app.health import router as health_router
 from app.infra.mcp import mcp
 from app.infra.mcp import tools as mural_tools
+from app.infra.rest import approval_router as mural_approval_router
 from app.infra.rest import board_router as mural_board_router
 from app.infra.rest import connectivity_router as mural_connect_router
 
@@ -41,6 +42,7 @@ def create_app(cfg: app_config.AppConfig) -> fastapi.FastAPI:
     fastapi_app.include_router(health_router.router)
     fastapi_app.include_router(mural_connect_router.router, prefix="/connect")
     fastapi_app.include_router(mural_board_router.router, prefix="/boards")
+    fastapi_app.include_router(mural_approval_router.router, prefix="/approvals")
 
     return fastapi_app
 
