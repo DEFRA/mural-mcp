@@ -13,3 +13,9 @@ class SettingsProvider(dishka.Provider):
         self, config: app_config.AppConfig
     ) -> app_config.MuralConfig:
         return config.mural_config
+
+    @dishka.provide(scope=dishka.Scope.APP)
+    def provide_identity_config(
+        self, config: app_config.AppConfig
+    ) -> app_config.IdentityConfig:
+        return config.identity_config

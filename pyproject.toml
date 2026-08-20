@@ -36,7 +36,6 @@ dev = [
 ]
 
 [project.scripts]
-mural-mcp-stdio = "app.entrypoints.stdio:main"
 mural-mcp-http = "app.entrypoints.http:main"
 
 [build-system]

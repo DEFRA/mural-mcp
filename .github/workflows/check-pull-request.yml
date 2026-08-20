@@ -4,40 +4,45 @@ on:
   pull_request:
     branches:
       - main
-    types:
-      - opened
-      - edited
-      - reopened
-      - synchronize
-      - ready_for_review
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
-  pr-validator:
-    name: Run Pull Request Checks
+  test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          python-version-file: .python-version
+          fetch-depth: 0
 
-      - name: Run tests
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Lint
+        run: uv run task lint
+
+      - name: Typecheck
+        run: uv run task typecheck
+
+      - name: Test
         run: |
-          pipx install uv==0.11.17
-          uv sync --frozen
-          uv run task test
+          uv run pytest -m "not integration" -vv
+          uv run coverage run -m pytest -m "not integration"
+          uv run coverage xml
+        # Coverage is re-run under `coverage` (rather than reusing the -vv
+        # run above) so a failing test still shows a normal pytest trace
+        # instead of coverage's own runner output.
 
-      # - name: SonarCloud Scan
-      #   uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # 8.1.0
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-      - name: Test Docker Image Build
-        run: |
-          set +e
-          docker build --no-cache --tag mural-mcp .
-          exit $?
+      # Requires the SONAR_TOKEN secret and sonar-project.properties.
+      - name: SonarCloud scan
+        uses: SonarSource/sonarqube-scan-action@v4
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

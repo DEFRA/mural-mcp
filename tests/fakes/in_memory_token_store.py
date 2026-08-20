@@ -1,5 +1,5 @@
-from app.mural.connectivity import models as schemas
-from app.mural.connectivity import ports as token_store
+from app.integration.linking import models as schemas
+from app.integration.linking import ports as token_store
 
 
 class InMemoryTokenStore(token_store.TokenStore):

@@ -12,16 +12,16 @@ from app.di import container as di_container
 from app.health import router as health_router
 from app.infra.mcp import mcp
 from app.infra.mcp import tools as mural_tools
+from app.infra.rest import admin_router, token_router
 from app.infra.rest import approval_router as mural_approval_router
-from app.infra.rest import board_router as mural_board_router
-from app.infra.rest import connectivity_router as mural_connect_router
+from app.infra.rest import linking_router as mural_connect_router
 
 logger = logging.getLogger(__name__)
 
 
 def create_app(cfg: app_config.AppConfig) -> fastapi.FastAPI:
     container = di_container.build_async_container()
-    mcp_fastmcp = mcp.build_mcp_app(container)
+    mcp_fastmcp = mcp.build_mcp_app(container, cfg)
     mural_tools.register_tools(mcp_fastmcp)
     mcp_app = mcp_fastmcp.http_app(path="/")
 
@@ -40,25 +40,34 @@ def create_app(cfg: app_config.AppConfig) -> fastapi.FastAPI:
     fastapi_app.add_middleware(tracing.ContainerMiddleware)
     fastapi_app.add_middleware(tracing.TraceIdMiddleware, cfg=cfg)
     fastapi_app.include_router(health_router.router)
-    fastapi_app.include_router(mural_connect_router.router, prefix="/connect")
-    fastapi_app.include_router(mural_board_router.router, prefix="/boards")
+    fastapi_app.include_router(mural_connect_router.router, prefix="/linking")
     fastapi_app.include_router(mural_approval_router.router, prefix="/approvals")
+    fastapi_app.include_router(token_router.router, prefix="/tokens")
+    fastapi_app.include_router(admin_router.router, prefix="/admin")
 
     return fastapi_app
+
+
+def create_app_factory() -> fastapi.FastAPI:  # pragma: no cover
+    """Entrypoint for uvicorn's reloader, which needs an import string (not a
+    live app instance) so it can rebuild the app in each reloaded worker."""
+    with di_container.build_sync_container() as _container:
+        cfg = _container.get(app_config.AppConfig)
+
+    return create_app(cfg)
 
 
 def main() -> None:  # pragma: no cover
     with di_container.build_sync_container() as _container:
         cfg = _container.get(app_config.AppConfig)
 
-    fastapi_app = create_app(cfg)
-
     uvicorn.run(
-        fastapi_app,
+        "app.entrypoints.http:create_app_factory",
         host=cfg.host,
         port=cfg.port,
         log_config=cfg.log_config,
         reload=cfg.python_env == "development",
+        factory=True,
     )
 
 

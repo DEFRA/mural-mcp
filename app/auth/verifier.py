@@ -1,28 +1,27 @@
-import dishka
-from fastmcp.server import auth as fastmcp_auth
+"""Our own token-verification port, so surfaces don't depend on FastMCP.
 
-from app.auth import service
+TokenVerifier is the seam both /mcp and the REST surface target: hand it a
+bearer token, get back a VerifiedToken (validated claims) or None if the
+token is not acceptable. mural-mcp mints its own personal access tokens
+rather than validating an external IdP's signature, so the concrete binding
+is a Mongo lookup — it lives in app.infra.auth.personal_token. Nothing
+outside that adapter (and its two thin per-surface wrappers,
+app.infra.mcp.auth and app.infra.rest.auth.resolver) needs to import FastMCP
+or know how verification actually happens.
+"""
+
+import dataclasses
+from typing import Any, Protocol
 
 
-class BearerTokenVerifier(fastmcp_auth.TokenVerifier):
-    def __init__(self, container: dishka.AsyncContainer) -> None:
-        super().__init__()
-        self._container = container
+@dataclasses.dataclass(frozen=True, slots=True)
+class VerifiedToken:
+    """A token the verifier accepted, and the claims it carries."""
 
-    async def verify_token(self, token: str) -> fastmcp_auth.AccessToken | None:
-        if not token or not token.strip():
-            return None
+    claims: dict[str, Any]
 
-        bearer_svc = await self._container.get(service.BearerTokenService)
 
-        email = await bearer_svc.resolve_email(token)
+class TokenVerifier(Protocol):
+    """Validates a bearer token, returning None if it is not acceptable."""
 
-        if email is None:
-            return None
-
-        return fastmcp_auth.AccessToken(
-            token=token,
-            client_id=email,
-            scopes=[],
-            claims={"email": email},
-        )
+    async def verify(self, token: str) -> VerifiedToken | None: ...
