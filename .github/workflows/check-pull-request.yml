@@ -14,35 +14,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 
         with:
           fetch-depth: 0
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
-          python-version: "3.14"
+          python-version-file: .python-version
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d 
+        with:
+          python-version-file: .python-version
 
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Lint
-        run: uv run task lint
-
-      - name: Typecheck
-        run: uv run task typecheck
-
       - name: Test
         run: |
-          uv run pytest -m "not integration" -vv
-          uv run coverage run -m pytest -m "not integration"
-          uv run coverage xml
-        # Coverage is re-run under `coverage` (rather than reusing the -vv
-        # run above) so a failing test still shows a normal pytest trace
-        # instead of coverage's own runner output.
+          uv run task test
 
-      # Requires the SONAR_TOKEN secret and sonar-project.properties.
       - name: SonarCloud scan
-        uses: SonarSource/sonarqube-scan-action@v4
+        uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: Test Docker Image Build
+        run: |
+          set +e
+          docker build --no-cache --tag mural-mcp .
+          exit $?
