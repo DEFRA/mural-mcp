@@ -32,6 +32,7 @@ dev = [
     "pytest-mock==3.15.1",
     "ruff==0.11.13",
     "taskipy==1.14.1",
+    "testcontainers>=4.15.0",
     "vcrpy==8.2.1",
 ]
 
@@ -169,7 +170,13 @@ test = "uv run task lint && uv run task typecheck && uv run coverage run -m pyte
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--strict-markers"
+addopts = "--strict-markers --import-mode=importlib"
+# importlib mode lets the same basename appear in tests/unit/ and tests/app/,
+# which the mirror in docs/python-testing-standard.md depends on.
+consider_namespace_packages = true
+pythonpath = ["."]
+asyncio_mode = "auto"
 markers = [
-    "integration: marks integration tests (run with -m integration)",
+    "vcr: replays a recorded HTTP cassette from tests/cassettes",
+    "mongo: requires a live MongoDB (see compose.yaml)",
 ]

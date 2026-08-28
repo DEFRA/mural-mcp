@@ -48,7 +48,7 @@ class TestStoreTokens:
         result = await store.get_tokens("user-123")
 
         assert result is not None
-        assert result.access_token == "example-access-token-1"
+        assert result.access_token == "example-access-token-2"
         assert (
             await mongo_db["mural_tokens"].count_documents({"user_id": "user-123"}) == 1
         )

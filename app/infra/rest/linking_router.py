@@ -44,9 +44,7 @@ class MuralStatusResponse(pydantic.BaseModel):
     )
 
     linked: bool
-    access_token_expires_at: datetime.datetime | None = pydantic.Field(
-        default=None, alias="accessTokenExpiresAt"
-    )
+    access_token_expires_at: datetime.datetime | None = pydantic.Field(default=None)
 
 
 @router.get("/authorization-url")

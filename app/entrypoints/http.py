@@ -2,6 +2,7 @@ import collections
 import contextlib
 import logging
 
+import dishka
 import fastapi
 import fastmcp.utilities.lifespan as fastmcp_lifespan
 import uvicorn
@@ -19,8 +20,12 @@ from app.infra.rest import linking_router as mural_connect_router
 logger = logging.getLogger(__name__)
 
 
-def create_app(cfg: app_config.AppConfig) -> fastapi.FastAPI:
-    container = di_container.build_async_container()
+def create_app(
+    cfg: app_config.AppConfig,
+    *,
+    container: dishka.AsyncContainer | None = None,
+) -> fastapi.FastAPI:
+    container = container or di_container.build_async_container()
     mcp_fastmcp = mcp.build_mcp_app(container, cfg)
     mural_tools.register_tools(mcp_fastmcp)
     mcp_app = mcp_fastmcp.http_app(path="/")
