@@ -21,7 +21,7 @@ class TestStoreTokens:
         token = models.MuralToken(
             access_token="example-access-token",
             refresh_token="example-refresh-token",
-            expires_at=expires_at
+            expires_at=expires_at,
         )
 
         await store.store_tokens("user-123", token)
@@ -34,8 +34,14 @@ class TestStoreTokens:
 
     async def test_replaces_rather_than_duplicates(self, mongo_db):
         store = mongo_store.MongoTokenStore(mongo_db["mural_tokens"])
-        first = models.MuralToken(access_token="example-access-token-1", refresh_token="example-refresh-token-1")
-        second = models.MuralToken(access_token="example-access-token-2", refresh_token="example-refresh-token-2")
+        first = models.MuralToken(
+            access_token="example-access-token-1",
+            refresh_token="example-refresh-token-1",
+        )
+        second = models.MuralToken(
+            access_token="example-access-token-2",
+            refresh_token="example-refresh-token-2",
+        )
 
         await store.store_tokens("user-123", first)
         await store.store_tokens("user-123", second)

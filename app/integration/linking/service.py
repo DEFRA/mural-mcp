@@ -43,11 +43,8 @@ class LinkingService:
         """Remove the user's stored Mural credentials."""
         await self._tokens.delete_tokens(user_id)
 
-    async def get_connection_status(
-        self, user_id: str
-    ) -> models.MuralConnectionStatus:
-        """Get the user's Mural connection status, including token expiry.
-        """
+    async def get_connection_status(self, user_id: str) -> models.MuralConnectionStatus:
+        """Get the user's Mural connection status, including token expiry."""
         token = await self._tokens.get_tokens(user_id)
 
         if token is None:

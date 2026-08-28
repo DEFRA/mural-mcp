@@ -35,9 +35,7 @@ class OAuthClient:
 
     @property
     def redirect_uri(self) -> str:
-        return (
-            self._config.mural_config.callback_path
-        )
+        return self._config.mural_config.callback_path
 
     @property
     def _token_url(self) -> str:

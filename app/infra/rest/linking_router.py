@@ -53,7 +53,9 @@ class MuralStatusResponse(pydantic.BaseModel):
 @dishka_fastapi.inject
 async def get_mural_authorization_url(
     linking: dishka_fastapi.FromDishka[linking_service.LinkingService],
-    principal: Annotated[principal_module.Principal, fastapi.Depends(auth_deps.get_principal)],
+    principal: Annotated[
+        principal_module.Principal, fastapi.Depends(auth_deps.get_principal)
+    ],
 ) -> AuthorizationUrlResponse:
     # principal.user_id is resolved/minted transparently on every request by
     # get_principal's UserResolver (TrustedHeaderUserResolver by default) —
@@ -70,7 +72,9 @@ async def get_mural_authorization_url(
 async def mural_callback(
     query: Annotated[MuralCallbackQuery, fastapi.Query()],
     linking: dishka_fastapi.FromDishka[linking_service.LinkingService],
-    principal: Annotated[principal_module.Principal, fastapi.Depends(auth_deps.get_principal)],
+    principal: Annotated[
+        principal_module.Principal, fastapi.Depends(auth_deps.get_principal)
+    ],
 ) -> CallbackResponse:
     try:
         await linking.complete_connection(principal.user_id, query.code, query.state)
@@ -86,7 +90,9 @@ async def mural_callback(
 @dishka_fastapi.inject
 async def get_mural_status(
     linking: dishka_fastapi.FromDishka[linking_service.LinkingService],
-    principal: Annotated[principal_module.Principal, fastapi.Depends(auth_deps.get_principal)],
+    principal: Annotated[
+        principal_module.Principal, fastapi.Depends(auth_deps.get_principal)
+    ],
 ) -> MuralStatusResponse:
     status = await linking.get_connection_status(principal.user_id)
 

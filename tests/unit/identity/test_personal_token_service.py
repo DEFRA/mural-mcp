@@ -191,4 +191,3 @@ class TestRevoke:
     ) -> None:
         with pytest.raises(exceptions.TokenNotFoundError):
             await service.revoke("usr_abc", "pat_does-not-exist")
- 
