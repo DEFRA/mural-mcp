@@ -110,72 +110,74 @@ def _build_app() -> fastapi.FastAPI:
     return app
 
 
-def test_mint_use_and_revoke_end_to_end() -> None:
-    with fastapi.testclient.TestClient(_build_app()) as client:
-        mint = client.post(
-            "/tokens",
-            json={"label": "Claude Code"},
-            headers={"X-User-Id": "dev@example.com"},
-        )
-        assert mint.status_code == 201
-        body = mint.json()
-        assert body["token"].startswith("mmcp_")
-        secret = body["token"]
+class TestPersonalTokens:
+    def test_mint_use_and_revoke_end_to_end(self) -> None:
+        with fastapi.testclient.TestClient(_build_app()) as client:
+            mint = client.post(
+                "/tokens",
+                json={"label": "Claude Code"},
+                headers={"X-User-Id": "dev@example.com"},
+            )
+            assert mint.status_code == 201
+            body = mint.json()
+            assert body["token"].startswith("mmcp_")
+            secret = body["token"]
 
-        protected = client.get(
-            "/protected", headers={"Authorization": f"Bearer {secret}"}
-        )
-        assert protected.status_code == 200
-        assert protected.json()["user_id"].startswith("usr_")
+            protected = client.get(
+                "/protected", headers={"Authorization": f"Bearer {secret}"}
+            )
+            assert protected.status_code == 200
+            assert protected.json()["user_id"].startswith("usr_")
 
-        listing = client.get("/tokens", headers={"X-User-Id": "dev@example.com"})
-        assert listing.status_code == 200
-        assert len(listing.json()) == 1
-        assert "token" not in listing.json()[0]
+            listing = client.get("/tokens", headers={"X-User-Id": "dev@example.com"})
+            assert listing.status_code == 200
+            assert len(listing.json()) == 1
+            assert "token" not in listing.json()[0]
 
-        revoke = client.delete(
-            f"/tokens/{body['id']}", headers={"X-User-Id": "dev@example.com"}
-        )
-        assert revoke.status_code == 204
+            revoke = client.delete(
+                f"/tokens/{body['id']}", headers={"X-User-Id": "dev@example.com"}
+            )
+            assert revoke.status_code == 204
 
-        after_revoke = client.get(
-            "/protected", headers={"Authorization": f"Bearer {secret}"}
-        )
-        assert after_revoke.status_code == 401
+            after_revoke = client.get(
+                "/protected", headers={"Authorization": f"Bearer {secret}"}
+            )
+            assert after_revoke.status_code == 401
 
+    def test_mint_requires_the_trusted_header(self) -> None:
+        with fastapi.testclient.TestClient(_build_app()) as client:
+            response = client.post("/tokens", json={"label": "Claude Code"})
+            assert response.status_code == 400
 
-def test_mint_requires_the_trusted_header() -> None:
-    with fastapi.testclient.TestClient(_build_app()) as client:
-        response = client.post("/tokens", json={"label": "Claude Code"})
-        assert response.status_code == 400
+    def test_different_users_get_independent_token_lists(self) -> None:
+        with fastapi.testclient.TestClient(_build_app()) as client:
+            client.post(
+                "/tokens", json={"label": "a"}, headers={"X-User-Id": "a@example.com"}
+            )
+            client.post(
+                "/tokens", json={"label": "b"}, headers={"X-User-Id": "b@example.com"}
+            )
 
+            a_tokens = client.get(
+                "/tokens", headers={"X-User-Id": "a@example.com"}
+            ).json()
+            b_tokens = client.get(
+                "/tokens", headers={"X-User-Id": "b@example.com"}
+            ).json()
 
-def test_different_users_get_independent_token_lists() -> None:
-    with fastapi.testclient.TestClient(_build_app()) as client:
-        client.post(
-            "/tokens", json={"label": "a"}, headers={"X-User-Id": "a@example.com"}
-        )
-        client.post(
-            "/tokens", json={"label": "b"}, headers={"X-User-Id": "b@example.com"}
-        )
+            assert len(a_tokens) == 1
+            assert len(b_tokens) == 1
+            assert a_tokens[0]["label"] == "a"
+            assert b_tokens[0]["label"] == "b"
 
-        a_tokens = client.get("/tokens", headers={"X-User-Id": "a@example.com"}).json()
-        b_tokens = client.get("/tokens", headers={"X-User-Id": "b@example.com"}).json()
+    def test_revoking_another_users_token_is_not_found(self) -> None:
+        with fastapi.testclient.TestClient(_build_app()) as client:
+            mint = client.post(
+                "/tokens", json={"label": "a"}, headers={"X-User-Id": "a@example.com"}
+            )
+            token_id = mint.json()["id"]
 
-        assert len(a_tokens) == 1
-        assert len(b_tokens) == 1
-        assert a_tokens[0]["label"] == "a"
-        assert b_tokens[0]["label"] == "b"
-
-
-def test_revoking_another_users_token_is_not_found() -> None:
-    with fastapi.testclient.TestClient(_build_app()) as client:
-        mint = client.post(
-            "/tokens", json={"label": "a"}, headers={"X-User-Id": "a@example.com"}
-        )
-        token_id = mint.json()["id"]
-
-        response = client.delete(
-            f"/tokens/{token_id}", headers={"X-User-Id": "b@example.com"}
-        )
-        assert response.status_code == 404
+            response = client.delete(
+                f"/tokens/{token_id}", headers={"X-User-Id": "b@example.com"}
+            )
+            assert response.status_code == 404

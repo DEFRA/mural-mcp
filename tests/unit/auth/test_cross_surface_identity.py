@@ -19,7 +19,6 @@ import unittest.mock
 
 import fastapi
 import fastmcp.server.auth as fastmcp_auth
-import pytest
 
 from app.di.providers import auth as auth_provider
 from app.identity import service as identity_service
@@ -28,50 +27,6 @@ from app.infra.rest.auth import resolver
 from tests.fakes import in_memory_identity_store
 
 _PREFIX = "mmcp_"
-
-
-@pytest.mark.asyncio
-async def test_mcp_and_rest_resolve_the_same_token_to_the_same_user_id() -> None:
-    users = in_memory_identity_store.InMemoryUserStore()
-    tokens = in_memory_identity_store.InMemoryPersonalAccessTokenStore()
-    identity = identity_service.IdentityService(users)
-    token_service = identity_service.PersonalTokenService(
-        tokens,
-        token_prefix=_PREFIX,
-        default_ttl_days=90,
-        max_ttl_days=365,
-        last_used_throttle_seconds=300,
-    )
-    verifier = personal_token.PersonalTokenVerifier(token_service, identity)
-
-    user = await identity.resolve_or_create("entra-oid-123", email="a@example.com")
-    _, secret = await token_service.mint(user.user_id, "Claude Code")
-
-    # REST: app.infra.rest.auth.resolver.PersonalTokenUserResolver.
-    rest_resolver = resolver.PersonalTokenUserResolver(verifier)
-    rest_principal = await rest_resolver.resolve(_request_with_bearer(secret))
-
-    # MCP: app.di.providers.auth.AuthProvider.provide_principal, driven off
-    # the same VerifiedToken claims via a stubbed fastmcp AccessToken (the
-    # shape app.infra.mcp.auth._McpTokenVerifier.verify_token produces).
-    verified = await verifier.verify(secret)
-    assert verified is not None
-    access_token = fastmcp_auth.AccessToken(
-        token=secret,
-        client_id=str(verified.claims.get("sub", "")),
-        scopes=[],
-        claims=verified.claims,
-    )
-    with unittest.mock.patch(
-        "app.di.providers.auth.fastmcp_deps.get_access_token",
-        return_value=access_token,
-    ):
-        mcp_principal = auth_provider.AuthProvider().provide_principal(
-            unittest.mock.MagicMock()
-        )
-
-    assert rest_principal.user_id == mcp_principal.user_id == user.user_id
-    assert rest_principal.email == mcp_principal.email == "a@example.com"
 
 
 def _request_with_bearer(secret: str) -> fastapi.Request:
@@ -83,3 +38,49 @@ def _request_with_bearer(secret: str) -> fastapi.Request:
         "headers": [(b"authorization", f"Bearer {secret}".encode())],
     }
     return fastapi.Request(scope)
+
+
+class TestCrossSurfaceIdentity:
+    async def test_mcp_and_rest_resolve_the_same_token_to_the_same_user_id(
+        self,
+    ) -> None:
+        users = in_memory_identity_store.InMemoryUserStore()
+        tokens = in_memory_identity_store.InMemoryPersonalAccessTokenStore()
+        identity = identity_service.IdentityService(users)
+        token_service = identity_service.PersonalTokenService(
+            tokens,
+            token_prefix=_PREFIX,
+            default_ttl_days=90,
+            max_ttl_days=365,
+            last_used_throttle_seconds=300,
+        )
+        verifier = personal_token.PersonalTokenVerifier(token_service, identity)
+
+        user = await identity.resolve_or_create("entra-oid-123", email="a@example.com")
+        _, secret = await token_service.mint(user.user_id, "Claude Code")
+
+        # REST: app.infra.rest.auth.resolver.PersonalTokenUserResolver.
+        rest_resolver = resolver.PersonalTokenUserResolver(verifier)
+        rest_principal = await rest_resolver.resolve(_request_with_bearer(secret))
+
+        # MCP: app.di.providers.auth.AuthProvider.provide_principal, driven off
+        # the same VerifiedToken claims via a stubbed fastmcp AccessToken (the
+        # shape app.infra.mcp.auth._McpTokenVerifier.verify_token produces).
+        verified = await verifier.verify(secret)
+        assert verified is not None
+        access_token = fastmcp_auth.AccessToken(
+            token=secret,
+            client_id=str(verified.claims.get("sub", "")),
+            scopes=[],
+            claims=verified.claims,
+        )
+        with unittest.mock.patch(
+            "app.di.providers.auth.fastmcp_deps.get_access_token",
+            return_value=access_token,
+        ):
+            mcp_principal = auth_provider.AuthProvider().provide_principal(
+                unittest.mock.MagicMock()
+            )
+
+        assert rest_principal.user_id == mcp_principal.user_id == user.user_id
+        assert rest_principal.email == mcp_principal.email == "a@example.com"

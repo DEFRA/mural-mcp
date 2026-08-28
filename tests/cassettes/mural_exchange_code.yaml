@@ -1,6 +1,6 @@
 interactions:
 - request:
-    body: grant_type=authorization_code&code=auth_code_123&redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Fconnect%2Fmural%2Fcallback&client_id=test_client_id&client_secret=[FILTERED]
+    body: grant_type=authorization_code&code=[FILTERED]&redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Fconnect%2Fmural%2Fcallback&client_id=test_client_id&client_secret=[FILTERED]
     headers:
       accept:
       - '*/*'
@@ -20,7 +20,7 @@ interactions:
     uri: https://app.mural.co/api/public/v1/authorization/oauth2/token
   response:
     body:
-      string: '{"access_token":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLTEyMyIsImlhdCI6MTc3NTk1MDAwMCwiZXhwIjoxNzc1OTUzNjAwfQ.fake_signature","refresh_token":"refresh_token_123","token_type":"Bearer","expires_in":3600}'
+      string: '{"access_token":"[FILTERED]","refresh_token":"[FILTERED]","token_type":"Bearer","expires_in":3600}'
     headers:
       content-type:
       - application/json

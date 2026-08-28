@@ -40,32 +40,32 @@ def _identity_auth_files() -> list[pathlib.Path]:
     )
 
 
-def test_verify_signature_appears_nowhere_in_the_identity_path() -> None:
-    hits = [
-        str(path.relative_to(_REPO_ROOT))
-        for path in _identity_auth_files()
-        if "verify_signature" in path.read_text()
-    ]
-    assert not hits, f"'verify_signature' found in: {hits}"
+class TestNoSignatureVerificationBypass:
+    def test_verify_signature_appears_nowhere_in_the_identity_path(self) -> None:
+        hits = [
+            str(path.relative_to(_REPO_ROOT))
+            for path in _identity_auth_files()
+            if "verify_signature" in path.read_text()
+        ]
+        assert not hits, f"'verify_signature' found in: {hits}"
 
+    def test_app_config_has_no_dev_auth_bypass_fields(self) -> None:
+        forbidden = {"dev_auth_enabled", "dev_auth_jwt_secret"}
+        present = forbidden & set(AppConfig.model_fields)
+        assert not present, f"AppConfig still declares bypass field(s): {present}"
 
-def test_app_config_has_no_dev_auth_bypass_fields() -> None:
-    forbidden = {"dev_auth_enabled", "dev_auth_jwt_secret"}
-    present = forbidden & set(AppConfig.model_fields)
-    assert not present, f"AppConfig still declares bypass field(s): {present}"
+    @pytest.mark.parametrize("needle", ['algorithms=["none"]', "alg: none", "'none'"])
+    def test_no_unsigned_alg_none_handling_in_the_identity_path(
+        self, needle: str
+    ) -> None:
+        hits = [
+            str(path.relative_to(_REPO_ROOT))
+            for path in _identity_auth_files()
+            if needle in path.read_text()
+        ]
+        assert not hits, f"{needle!r} found in: {hits}"
 
-
-@pytest.mark.parametrize("needle", ['algorithms=["none"]', "alg: none", "'none'"])
-def test_no_unsigned_alg_none_handling_in_the_identity_path(needle: str) -> None:
-    hits = [
-        str(path.relative_to(_REPO_ROOT))
-        for path in _identity_auth_files()
-        if needle in path.read_text()
-    ]
-    assert not hits, f"{needle!r} found in: {hits}"
-
-
-def test_identity_auth_dirs_are_not_empty() -> None:
-    """Guards against the checks above silently collecting zero files if
-    these directories are ever moved/renamed."""
-    assert len(_identity_auth_files()) >= 5
+    def test_identity_auth_dirs_are_not_empty(self) -> None:
+        """Guards against the checks above silently collecting zero files if
+        these directories are ever moved/renamed."""
+        assert len(_identity_auth_files()) >= 5

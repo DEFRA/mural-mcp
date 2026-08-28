@@ -29,72 +29,68 @@ def _make_service(
     )
 
 
-@pytest.mark.asyncio
-async def test_get_authorization_url_issues_state_and_returns_authorization_url() -> (
-    None
-):
-    oauth = _make_oauth_mock()
-    oauth.build_authorization_url.side_effect = (
-        lambda state: f"https://app.mural.co/authorize?state={state}"
-    )
-    linking, _tokens, states = _make_service(oauth)
+class TestGetAuthorizationUrl:
+    async def test_issues_state_and_returns_authorization_url(self) -> None:
+        oauth = _make_oauth_mock()
+        oauth.build_authorization_url.side_effect = (
+            lambda state: f"https://app.mural.co/authorize?state={state}"
+        )
+        linking, _tokens, states = _make_service(oauth)
 
-    url = await linking.get_authorization_url("user-123")
+        url = await linking.get_authorization_url("user-123")
 
-    assert url.startswith("https://app.mural.co/authorize?state=")
-    issued_state = url.rsplit("=", 1)[1]
-    # The state was consumed by build_authorization_url's caller only in
-    # spirit -- issue() doesn't consume, so it should still resolve here.
-    oauth_state = await states.consume(issued_state)
-    assert oauth_state.user_id == "user-123"
+        assert url.startswith("https://app.mural.co/authorize?state=")
+        issued_state = url.rsplit("=", 1)[1]
+        # The state was consumed by build_authorization_url's caller only in
+        # spirit -- issue() doesn't consume, so it should still resolve here.
+        oauth_state = await states.consume(issued_state)
+        assert oauth_state.user_id == "user-123"
 
 
-@pytest.mark.asyncio
-async def test_complete_connection_exchanges_code_and_stores_token() -> None:
-    oauth = _make_oauth_mock()
-    token = models.MuralToken(access_token="a", refresh_token="b")
-    oauth.exchange_code.return_value = token
-    linking, tokens, states = _make_service(oauth)
-    state = await states.issue("user-123")
+class TestCompleteConnection:
+    async def test_exchanges_code_and_stores_token(self) -> None:
+        oauth = _make_oauth_mock()
+        token = models.MuralToken(access_token="a", refresh_token="b")
+        oauth.exchange_code.return_value = token
+        linking, tokens, states = _make_service(oauth)
+        state = await states.issue("user-123")
 
-    await linking.complete_connection("user-123", "auth-code", state)
+        await linking.complete_connection("user-123", "auth-code", state)
 
-    oauth.exchange_code.assert_awaited_once_with("auth-code")
-    assert await tokens.get_tokens("user-123") == token
+        oauth.exchange_code.assert_awaited_once_with("auth-code")
+        assert await tokens.get_tokens("user-123") == token
 
+    async def test_raises_on_user_mismatch(self) -> None:
+        oauth = _make_oauth_mock()
+        linking, tokens, states = _make_service(oauth)
+        state = await states.issue("user-123")
 
-@pytest.mark.asyncio
-async def test_complete_connection_raises_on_user_mismatch() -> None:
-    oauth = _make_oauth_mock()
-    linking, tokens, states = _make_service(oauth)
-    state = await states.issue("user-123")
+        with pytest.raises(exceptions.LinkMismatchError):
+            await linking.complete_connection("someone-else", "auth-code", state)
 
-    with pytest.raises(exceptions.LinkMismatchError):
-        await linking.complete_connection("someone-else", "auth-code", state)
+        oauth.exchange_code.assert_not_called()
+        assert await tokens.get_tokens("user-123") is None
 
-    oauth.exchange_code.assert_not_called()
-    assert await tokens.get_tokens("user-123") is None
+    async def test_propagates_unknown_state_error(self) -> None:
+        oauth = _make_oauth_mock()
+        linking, _tokens, _states = _make_service(oauth)
 
+        with pytest.raises(exceptions.OAuthStateError):
+            await linking.complete_connection(
+                "user-123", "auth-code", "not-a-real-state"
+            )
 
-@pytest.mark.asyncio
-async def test_complete_connection_propagates_unknown_state_error() -> None:
-    oauth = _make_oauth_mock()
-    linking, _tokens, _states = _make_service(oauth)
-
-    with pytest.raises(exceptions.OAuthStateError):
-        await linking.complete_connection("user-123", "auth-code", "not-a-real-state")
-
-    oauth.exchange_code.assert_not_called()
+        oauth.exchange_code.assert_not_called()
 
 
-@pytest.mark.asyncio
-async def test_disconnect_removes_stored_token() -> None:
-    oauth = _make_oauth_mock()
-    linking, tokens, _states = _make_service(oauth)
-    await tokens.store_tokens(
-        "user-123", models.MuralToken(access_token="a", refresh_token="b")
-    )
+class TestDisconnect:
+    async def test_removes_stored_token(self) -> None:
+        oauth = _make_oauth_mock()
+        linking, tokens, _states = _make_service(oauth)
+        await tokens.store_tokens(
+            "user-123", models.MuralToken(access_token="a", refresh_token="b")
+        )
 
-    await linking.disconnect("user-123")
+        await linking.disconnect("user-123")
 
-    assert await tokens.get_tokens("user-123") is None
+        assert await tokens.get_tokens("user-123") is None

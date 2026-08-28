@@ -1,5 +1,3 @@
-import pytest
-
 from app.auth import verifier as verifier_port
 from app.infra.mcp import auth as mcp_auth
 
@@ -22,23 +20,23 @@ class _FakeVerifier:
         return self._result
 
 
-@pytest.mark.asyncio
-async def test_verify_token_returns_access_token_with_claims() -> None:
-    fake_verifier = _FakeVerifier(
-        verifier_port.VerifiedToken(claims={"sub": "usr_abc", "email": "a@example.com"})
-    )
-    provider = mcp_auth.build_auth_provider(_FakeContainer(fake_verifier))  # type: ignore[arg-type]
+class TestVerifyToken:
+    async def test_returns_access_token_with_claims(self) -> None:
+        fake_verifier = _FakeVerifier(
+            verifier_port.VerifiedToken(
+                claims={"sub": "usr_abc", "email": "a@example.com"}
+            )
+        )
+        provider = mcp_auth.build_auth_provider(_FakeContainer(fake_verifier))  # type: ignore[arg-type]
 
-    result = await provider.verify_token("mmcp_something")
+        result = await provider.verify_token("mmcp_something")
 
-    assert result is not None
-    assert result.client_id == "usr_abc"
-    assert result.claims == {"sub": "usr_abc", "email": "a@example.com"}
-    assert result.scopes == []
+        assert result is not None
+        assert result.client_id == "usr_abc"
+        assert result.claims == {"sub": "usr_abc", "email": "a@example.com"}
+        assert result.scopes == []
 
+    async def test_returns_none_when_the_port_rejects_it(self) -> None:
+        provider = mcp_auth.build_auth_provider(_FakeContainer(_FakeVerifier(None)))  # type: ignore[arg-type]
 
-@pytest.mark.asyncio
-async def test_verify_token_returns_none_when_the_port_rejects_it() -> None:
-    provider = mcp_auth.build_auth_provider(_FakeContainer(_FakeVerifier(None)))  # type: ignore[arg-type]
-
-    assert await provider.verify_token("mmcp_garbage") is None
+        assert await provider.verify_token("mmcp_garbage") is None

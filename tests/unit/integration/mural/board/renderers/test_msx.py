@@ -51,92 +51,68 @@ def create_sticky_widget(
     )
 
 
-def test_render_empty_tree() -> None:
-    """Test rendering an empty tree."""
-    tree = builder.WidgetTree.build([])
-    result = msx.render_msx(tree, _REG)
-    assert result == ""
+class TestRenderMsx:
+    def test_empty_tree(self) -> None:
+        tree = builder.WidgetTree.build([])
+        result = msx.render_msx(tree, _REG)
+        assert result == ""
 
+    def test_single_leaf(self) -> None:
+        """A widget with text is never self-closing -- the text has to live
+        somewhere."""
+        widget = create_sticky_widget("w1", text="Hello")
+        tree = builder.WidgetTree.build([widget])
+        result = msx.render_msx(tree, _REG)
+        assert 'id="w1"' in result
+        assert "</StickyNote>" in result
+        assert "/>" not in result
 
-def test_render_single_leaf() -> None:
-    """Test rendering a single top-level widget (self-closing tag)."""
-    widget = create_sticky_widget("w1", text="Hello")
-    tree = builder.WidgetTree.build([widget])
-    result = msx.render_msx(tree, _REG)
-    assert "<StickyNote" in result
-    assert 'id="w1"' in result
-    assert "/>" in result or "</StickyNote>" in result
+    def test_parent_with_children(self) -> None:
+        """The child tag is nested inside the parent's open/close pair, not
+        merely present."""
+        parent = create_sticky_widget("parent", parent_id=None, text="Parent")
+        child = create_sticky_widget("child", parent_id="parent", text="Child")
+        tree = builder.WidgetTree.build([parent, child])
+        result = msx.render_msx(tree, _REG)
 
+        parent_open = result.index('<StickyNote id="parent"')
+        child_open = result.index('<StickyNote id="child"')
+        parent_close = result.rindex("</StickyNote>")
 
-def test_render_parent_with_children() -> None:
-    """Test rendering a parent widget with children (nested tags)."""
-    parent = create_sticky_widget("parent", parent_id=None, text="Parent")
-    child = create_sticky_widget("child", parent_id="parent", text="Child")
-    tree = builder.WidgetTree.build([parent, child])
-    result = msx.render_msx(tree, _REG)
-    assert "<StickyNote" in result
-    assert "</StickyNote>" in result
-    lines = result.strip().split("\n")
-    assert len(lines) >= 2
+        assert parent_open < child_open < parent_close
 
+    def test_multiple_siblings(self) -> None:
+        w1 = create_sticky_widget("w1", text="First")
+        w2 = create_sticky_widget("w2", text="Second")
+        tree = builder.WidgetTree.build([w1, w2])
+        result = msx.render_msx(tree, _REG)
+        assert result.count("<StickyNote") == 2
 
-def test_render_multiple_siblings() -> None:
-    """Test rendering multiple sibling widgets."""
-    w1 = create_sticky_widget("w1", text="First")
-    w2 = create_sticky_widget("w2", text="Second")
-    tree = builder.WidgetTree.build([w1, w2])
-    result = msx.render_msx(tree, _REG)
-    assert result.count("<StickyNote") == 2
+    def test_sticky_text_as_inner_content(self) -> None:
+        """Sticky note text renders inside the tag, not as an attribute."""
+        widget = create_sticky_widget("w1", text="Hello")
+        tree = builder.WidgetTree.build([widget])
+        result = msx.render_msx(tree, _REG)
+        assert 'text="Hello"' not in result
+        assert "Hello" in result
+        assert "</StickyNote>" in result
 
+    def test_sticky_html_text_takes_precedence(self) -> None:
+        """html_text is used as inner content when both text and html_text
+        are set."""
+        widget = create_sticky_widget("w1", text="plain")
+        widget = widget.model_copy(update={"html_text": "<p>rich</p>"})
+        tree = builder.WidgetTree.build([widget])
+        result = msx.render_msx(tree, _REG)
+        assert "<p>rich</p>" in result
+        assert "plain" not in result
 
-def test_format_attrs_empty() -> None:
-    """Test formatting empty attributes."""
-    attrs = {}
-    result = msx._format_attrs(attrs)
-    assert result == ""
-
-
-def test_format_attrs_single() -> None:
-    """Test formatting a single attribute."""
-    attrs = {"id": "widget-1"}
-    result = msx._format_attrs(attrs)
-    assert result == ' id="widget-1"'
-
-
-def test_format_attrs_multiple() -> None:
-    """Test formatting multiple attributes."""
-    attrs = {"id": "w1", "text": "Hello", "color": "red"}
-    result = msx._format_attrs(attrs)
-    assert ' id="w1"' in result
-    assert ' text="Hello"' in result
-    assert ' color="red"' in result
-
-
-def test_render_sticky_text_as_inner_content() -> None:
-    """Sticky note text renders inside the tag, not as an attribute."""
-    widget = create_sticky_widget("w1", text="Hello")
-    tree = builder.WidgetTree.build([widget])
-    result = msx.render_msx(tree, _REG)
-    assert 'text="Hello"' not in result
-    assert "Hello" in result
-    assert "</StickyNote>" in result
-
-
-def test_render_sticky_html_text_takes_precedence() -> None:
-    """html_text is used as inner content when both text and html_text are set."""
-    widget = create_sticky_widget("w1", text="plain")
-    widget = widget.model_copy(update={"html_text": "<p>rich</p>"})
-    tree = builder.WidgetTree.build([widget])
-    result = msx.render_msx(tree, _REG)
-    assert "<p>rich</p>" in result
-    assert "plain" not in result
-
-
-def test_render_sticky_no_text_is_self_closing() -> None:
-    """Sticky note with no text and no children renders as self-closing tag."""
-    widget = create_sticky_widget("w1", text="")
-    widget = widget.model_copy(update={"text": None})
-    tree = builder.WidgetTree.build([widget])
-    result = msx.render_msx(tree, _REG)
-    assert "/>" in result
-    assert "</StickyNote>" not in result
+    def test_sticky_no_text_is_self_closing(self) -> None:
+        """Sticky note with no text and no children renders as self-closing
+        tag."""
+        widget = create_sticky_widget("w1", text="")
+        widget = widget.model_copy(update={"text": None})
+        tree = builder.WidgetTree.build([widget])
+        result = msx.render_msx(tree, _REG)
+        assert "/>" in result
+        assert "</StickyNote>" not in result

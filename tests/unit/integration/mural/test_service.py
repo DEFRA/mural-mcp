@@ -148,282 +148,265 @@ def _arrow(
     return d
 
 
-@pytest.mark.asyncio
-async def test_load_raises_when_user_has_no_token(make_service):
-    service, _ = make_service(responses=[], oauth_token=None)
-    with pytest.raises(exceptions.MuralTokenError):
-        await service._load("user-123", "mural-abc")
+class TestFetchSummary:
+    async def test_stops_paginating_when_next_token_absent(self, make_service):
+        service, transport = make_service(
+            responses=[httpx.Response(200, json={"value": [], "next": None})]
+        )
+        await service.fetch_summary("user-123", "mural-abc")
+        assert len(transport.requests) == 1
 
-
-@pytest.mark.asyncio
-async def test_load_stops_when_next_token_absent(make_service):
-    service, transport = make_service(
-        responses=[httpx.Response(200, json={"value": [], "next": None})]
-    )
-    await service._load("user-123", "mural-abc")
-    assert len(transport.requests) == 1
-
-
-@pytest.mark.asyncio
-async def test_load_follows_absolute_next_url(make_service):
-    service, transport = make_service(
-        responses=[
-            httpx.Response(
-                200,
-                json={
-                    "value": [],
-                    "next": "https://api.example.com/public/v1/murals/mural-abc/widgets?page=2",
-                },
-            ),
-            httpx.Response(200, json={"value": [], "next": None}),
-        ]
-    )
-    await service._load("user-123", "mural-abc")
-    assert len(transport.requests) == 2
-    assert (
-        str(transport.requests[1].url)
-        == "https://api.example.com/public/v1/murals/mural-abc/widgets?page=2"
-    )
-
-
-@pytest.mark.asyncio
-async def test_load_uses_next_token_as_query_param(make_service):
-    service, transport = make_service(
-        responses=[
-            httpx.Response(200, json={"value": [], "next": "opaque-token-xyz"}),
-            httpx.Response(200, json={"value": [], "next": None}),
-        ]
-    )
-    await service._load("user-123", "mural-abc")
-    assert len(transport.requests) == 2
-    assert transport.requests[1].url.params["next"] == "opaque-token-xyz"
-    assert (
-        str(transport.requests[1].url).split("?")[0]
-        == "https://app.mural.co/api/public/v1/murals/mural-abc/widgets"
-    )
-
-
-@pytest.mark.asyncio
-async def test_load_raises_on_http_error(make_service):
-    """A non-2xx from the Mural API must be wrapped in MuralApiError, not leak
-    the raw httpx.HTTPStatusError (which would expose vendor URLs/response
-    bodies to REST clients and LLM tool callers).
-    """
-    service, _ = make_service(responses=[httpx.Response(500)])
-    with pytest.raises(exceptions.MuralApiError) as exc_info:
-        await service._load("user-123", "mural-abc")
-    assert exc_info.value.status_code == 500
-
-
-def test_resolve_next_returns_none_when_no_next_token():
-    result = board_service.BoardService._resolve_next(
-        {"value": []}, "https://example.com/widgets"
-    )
-    assert result is None
-
-
-def test_resolve_next_returns_url_for_absolute_next():
-    result = board_service.BoardService._resolve_next(
-        {"next": "https://example.com/page2"}, "https://example.com/widgets"
-    )
-    assert result == ("https://example.com/page2", None)
-
-
-def test_resolve_next_returns_base_url_with_token_for_relative_next():
-    result = board_service.BoardService._resolve_next(
-        {"next": "page-2-token"}, "https://example.com/widgets"
-    )
-    assert result == ("https://example.com/widgets", {"next": "page-2-token"})
-
-
-def test_resolve_next_returns_none_when_data_not_dict():
-    result = board_service.BoardService._resolve_next(
-        [{"id": "w1"}], "https://example.com/widgets"
-    )
-    assert result is None
-
-
-@pytest.mark.asyncio
-async def test_fetch_summary_raises_when_no_token(make_service):
-    service, _ = make_service(responses=[], oauth_token=None)
-    with pytest.raises(exceptions.MuralTokenError):
+    async def test_every_mural_request_carries_the_users_access_token(
+        self, make_service
+    ):
+        service, transport = make_service(
+            responses=[
+                httpx.Response(200, json={"value": [], "next": "opaque-token-xyz"}),
+                httpx.Response(200, json={"value": [], "next": None}),
+            ],
+            oauth_token="mural-token-abc",
+        )
         await service.fetch_summary("user-123", "mural-abc")
 
+        assert len(transport.requests) == 2
+        assert (
+            transport.requests[0].headers["Authorization"] == "Bearer mural-token-abc"
+        )
+        assert (
+            transport.requests[1].headers["Authorization"] == "Bearer mural-token-abc"
+        )
 
-@pytest.mark.asyncio
-async def test_fetch_summary_returns_region_for_area_widget(make_service):
-    area = _area("a1", "Sprint Review", x=10, y=20, w=600, h=400)
-    note = _sticky("sn1", text="Note 1", parent_id="a1")
-    service, _ = make_service(
-        responses=[httpx.Response(200, json={"value": [area, note]})]
+    async def test_follows_an_absolute_next_url(self, make_service):
+        service, transport = make_service(
+            responses=[
+                httpx.Response(
+                    200,
+                    json={
+                        "value": [],
+                        "next": "https://api.example.com/public/v1/murals/mural-abc/widgets?page=2",
+                    },
+                ),
+                httpx.Response(200, json={"value": [], "next": None}),
+            ]
+        )
+        await service.fetch_summary("user-123", "mural-abc")
+        assert len(transport.requests) == 2
+        assert (
+            str(transport.requests[1].url)
+            == "https://api.example.com/public/v1/murals/mural-abc/widgets?page=2"
+        )
+
+    async def test_uses_an_opaque_next_token_as_a_query_param(self, make_service):
+        service, transport = make_service(
+            responses=[
+                httpx.Response(200, json={"value": [], "next": "opaque-token-xyz"}),
+                httpx.Response(200, json={"value": [], "next": None}),
+            ]
+        )
+        await service.fetch_summary("user-123", "mural-abc")
+        assert len(transport.requests) == 2
+        assert transport.requests[1].url.params["next"] == "opaque-token-xyz"
+        assert (
+            str(transport.requests[1].url).split("?")[0]
+            == "https://app.mural.co/api/public/v1/murals/mural-abc/widgets"
+        )
+
+    async def test_wraps_a_mural_http_error(self, make_service):
+        """A non-2xx from the Mural API must be wrapped in MuralApiError,
+        not leak the raw httpx.HTTPStatusError (which would expose vendor
+        URLs/response bodies to REST clients and LLM tool callers).
+        """
+        service, _ = make_service(responses=[httpx.Response(500)])
+        with pytest.raises(exceptions.MuralApiError) as exc_info:
+            await service.fetch_summary("user-123", "mural-abc")
+        assert exc_info.value.status_code == 500
+
+    async def test_raises_when_no_token(self, make_service):
+        service, _ = make_service(responses=[], oauth_token=None)
+        with pytest.raises(exceptions.MuralTokenError):
+            await service.fetch_summary("user-123", "mural-abc")
+
+    async def test_returns_region_for_area_widget(self, make_service):
+        area = _area("a1", "Sprint Review", x=10, y=20, w=600, h=400)
+        note = _sticky("sn1", text="Note 1", parent_id="a1")
+        service, _ = make_service(
+            responses=[httpx.Response(200, json={"value": [area, note]})]
+        )
+        result = await service.fetch_summary("user-123", "mural-abc")
+        assert '<Region id="a1"' in result
+        assert 'label="Sprint Review"' in result
+        assert 'count="1"' in result
+        assert 'x="10' in result
+        assert 'width="600' in result
+
+    async def test_omits_lone_root_widgets(self, make_service):
+        note = _sticky("sn1", text="Lone note")
+        service, _ = make_service(
+            responses=[httpx.Response(200, json={"value": [note]})]
+        )
+        result = await service.fetch_summary("user-123", "mural-abc")
+        assert "<Region" not in result
+
+    async def test_empty_board(self, make_service):
+        service, _ = make_service(responses=[httpx.Response(200, json={"value": []})])
+        result = await service.fetch_summary("user-123", "mural-abc")
+        assert "BoardSummary" in result
+        assert "<Region" not in result
+
+
+class TestResolveNext:
+    def test_returns_none_when_no_next_token(self):
+        result = board_service.BoardService._resolve_next(
+            {"value": []}, "https://example.com/widgets"
+        )
+        assert result is None
+
+    def test_returns_url_for_absolute_next(self):
+        result = board_service.BoardService._resolve_next(
+            {"next": "https://example.com/page2"}, "https://example.com/widgets"
+        )
+        assert result == ("https://example.com/page2", None)
+
+    def test_returns_base_url_with_token_for_relative_next(self):
+        result = board_service.BoardService._resolve_next(
+            {"next": "page-2-token"}, "https://example.com/widgets"
+        )
+        assert result == ("https://example.com/widgets", {"next": "page-2-token"})
+
+    def test_returns_none_when_data_not_dict(self):
+        result = board_service.BoardService._resolve_next(
+            [{"id": "w1"}], "https://example.com/widgets"
+        )
+        assert result is None
+
+
+class TestFetchRegion:
+    async def test_raises_when_no_token(self, make_service):
+        service, _ = make_service(responses=[], oauth_token=None)
+        with pytest.raises(exceptions.MuralTokenError):
+            await service.fetch_region("user-123", "mural-abc", "a1")
+
+    async def test_unknown_id_raises(self, make_service):
+        service, _ = make_service(responses=[httpx.Response(200, json={"value": []})])
+        with pytest.raises(
+            board_exceptions.BoardRegionNotFoundError, match="no-such-id"
+        ):
+            await service.fetch_region("user-123", "mural-abc", "no-such-id")
+
+    async def test_renders_area_subtree(self, make_service):
+        area = _area("a1", "Design Sprint")
+        note = _sticky("sn1", text="Hello", parent_id="a1")
+        service, _ = make_service(
+            responses=[httpx.Response(200, json={"value": [area, note]})]
+        )
+        result = await service.fetch_region("user-123", "mural-abc", "a1")
+        assert "<Area" in result
+        assert "<StickyNote" in result
+        assert "Hello" in result
+
+
+class TestFetchConnections:
+    async def test_raises_when_no_token(self, make_service):
+        service, _ = make_service(responses=[], oauth_token=None)
+        with pytest.raises(exceptions.MuralTokenError):
+            await service.fetch_connections("user-123", "mural-abc", "w1")
+
+    async def test_no_arrows_returns_empty_tag(self, make_service):
+        note = _sticky("sn1")
+        service, _ = make_service(
+            responses=[httpx.Response(200, json={"value": [note]})]
+        )
+        result = await service.fetch_connections("user-123", "mural-abc", "sn1")
+        assert result == '<Connections widget_id="sn1"/>'
+
+    async def test_outgoing(self, make_service):
+        src = _sticky("src")
+        dst = _sticky("dst")
+        arrow = _arrow("arr1", start_ref="src", end_ref="dst")
+        service, _ = make_service(
+            responses=[httpx.Response(200, json={"value": [src, dst, arrow]})]
+        )
+        result = await service.fetch_connections("user-123", "mural-abc", "src")
+        assert 'direction="outgoing"' in result
+        assert 'target_id="dst"' in result
+        assert 'arrow_id="arr1"' in result
+
+    async def test_incoming(self, make_service):
+        src = _sticky("src")
+        dst = _sticky("dst")
+        arrow = _arrow("arr1", start_ref="src", end_ref="dst")
+        service, _ = make_service(
+            responses=[httpx.Response(200, json={"value": [src, dst, arrow]})]
+        )
+        result = await service.fetch_connections("user-123", "mural-abc", "dst")
+        assert 'direction="incoming"' in result
+        assert 'source_id="src"' in result
+
+
+class TestSearchWidgets:
+    async def test_raises_when_no_token(self, make_service):
+        service, _ = make_service(responses=[], oauth_token=None)
+        with pytest.raises(exceptions.MuralTokenError):
+            await service.search_widgets("user-123", "mural-abc", "hello", None)
+
+    async def test_by_text_returns_matching(self, make_service):
+        note1 = _sticky("sn1", text="Hello World")
+        note2 = _sticky("sn2", text="Something else")
+        service, _ = make_service(
+            responses=[httpx.Response(200, json={"value": [note1, note2]})]
+        )
+        result = await service.search_widgets("user-123", "mural-abc", "hello", None)
+        assert "sn1" in result
+        assert "sn2" not in result
+
+    async def test_by_type(self, make_service):
+        note = _sticky("sn1", text="A sticky")
+        area = _area("a1", "An area")
+        service, _ = make_service(
+            responses=[httpx.Response(200, json={"value": [note, area]})]
+        )
+        result = await service.search_widgets("user-123", "mural-abc", None, "area")
+        assert "a1" in result
+        assert "sn1" not in result
+
+    async def test_no_match_returns_message(self, make_service):
+        note = _sticky("sn1", text="Nothing relevant")
+        service, _ = make_service(
+            responses=[httpx.Response(200, json={"value": [note]})]
+        )
+        result = await service.search_widgets(
+            "user-123", "mural-abc", "xyz-not-found", None
+        )
+        assert result == "No widgets matched."
+
+
+class TestGuardEnforcement:
+    @pytest.mark.parametrize(
+        "call",
+        [
+            lambda service: service.fetch_summary("user-123", "mural-abc"),
+            lambda service: service.fetch_region("user-123", "mural-abc", "region-1"),
+            lambda service: service.fetch_connections(
+                "user-123", "mural-abc", "widget-1"
+            ),
+            lambda service: service.search_widgets("user-123", "mural-abc", "q", None),
+        ],
+        ids=["fetch_summary", "fetch_region", "fetch_connections", "search_widgets"],
     )
-    result = await service.fetch_summary("user-123", "mural-abc")
-    assert result is not None
-    assert '<Region id="a1"' in result
-    assert 'label="Sprint Review"' in result
-    assert 'count="1"' in result
-    assert 'x="10' in result
-    assert 'width="600' in result
+    async def test_a_denied_guard_blocks_every_public_method_before_any_vendor_call(
+        self, make_service, call
+    ):
+        """The guard runs before BoardService talks to Mural at all -- not
+        just before it returns data. A denied user's call must not reach
+        the vendor, not even for a token refresh (FakeOAuthClient never
+        touches the transport either, so any request recorded here would be
+        a real bug).
+        """
+        store = in_memory_board_access_request_store.InMemoryBoardAccessRequestStore()
+        guard = guard_module.AllowListBoardGuard(store)
+        service, transport = make_service(responses=[], guard=guard)
 
+        with pytest.raises(guard_module.ForbiddenBoardError):
+            await call(service)
 
-@pytest.mark.asyncio
-async def test_fetch_summary_omits_lone_root_widgets(make_service):
-    note = _sticky("sn1", text="Lone note")
-    service, _ = make_service(responses=[httpx.Response(200, json={"value": [note]})])
-    result = await service.fetch_summary("user-123", "mural-abc")
-    assert result is not None
-    assert "<Region" not in result
-
-
-@pytest.mark.asyncio
-async def test_fetch_summary_empty_board(make_service):
-    service, _ = make_service(responses=[httpx.Response(200, json={"value": []})])
-    result = await service.fetch_summary("user-123", "mural-abc")
-    assert result is not None
-    assert "BoardSummary" in result
-    assert "<Region" not in result
-
-
-@pytest.mark.asyncio
-async def test_fetch_region_raises_when_no_token(make_service):
-    service, _ = make_service(responses=[], oauth_token=None)
-    with pytest.raises(exceptions.MuralTokenError):
-        await service.fetch_region("user-123", "mural-abc", "a1")
-
-
-@pytest.mark.asyncio
-async def test_fetch_region_unknown_id_raises(make_service):
-    service, _ = make_service(responses=[httpx.Response(200, json={"value": []})])
-    with pytest.raises(board_exceptions.BoardRegionNotFoundError, match="no-such-id"):
-        await service.fetch_region("user-123", "mural-abc", "no-such-id")
-
-
-@pytest.mark.asyncio
-async def test_fetch_region_renders_area_subtree(make_service):
-    area = _area("a1", "Design Sprint")
-    note = _sticky("sn1", text="Hello", parent_id="a1")
-    service, _ = make_service(
-        responses=[httpx.Response(200, json={"value": [area, note]})]
-    )
-    result = await service.fetch_region("user-123", "mural-abc", "a1")
-    assert result is not None
-    assert "<Area" in result
-    assert "<StickyNote" in result
-    assert "Hello" in result
-
-
-@pytest.mark.asyncio
-async def test_fetch_connections_raises_when_no_token(make_service):
-    service, _ = make_service(responses=[], oauth_token=None)
-    with pytest.raises(exceptions.MuralTokenError):
-        await service.fetch_connections("user-123", "mural-abc", "w1")
-
-
-@pytest.mark.asyncio
-async def test_fetch_connections_no_arrows_returns_empty_tag(make_service):
-    note = _sticky("sn1")
-    service, _ = make_service(responses=[httpx.Response(200, json={"value": [note]})])
-    result = await service.fetch_connections("user-123", "mural-abc", "sn1")
-    assert result is not None
-    assert result == '<Connections widget_id="sn1"/>'
-
-
-@pytest.mark.asyncio
-async def test_fetch_connections_outgoing(make_service):
-    src = _sticky("src")
-    dst = _sticky("dst")
-    arrow = _arrow("arr1", start_ref="src", end_ref="dst")
-    service, _ = make_service(
-        responses=[httpx.Response(200, json={"value": [src, dst, arrow]})]
-    )
-    result = await service.fetch_connections("user-123", "mural-abc", "src")
-    assert result is not None
-    assert 'direction="outgoing"' in result
-    assert 'target_id="dst"' in result
-    assert 'arrow_id="arr1"' in result
-
-
-@pytest.mark.asyncio
-async def test_fetch_connections_incoming(make_service):
-    src = _sticky("src")
-    dst = _sticky("dst")
-    arrow = _arrow("arr1", start_ref="src", end_ref="dst")
-    service, _ = make_service(
-        responses=[httpx.Response(200, json={"value": [src, dst, arrow]})]
-    )
-    result = await service.fetch_connections("user-123", "mural-abc", "dst")
-    assert result is not None
-    assert 'direction="incoming"' in result
-    assert 'source_id="src"' in result
-
-
-@pytest.mark.asyncio
-async def test_search_widgets_raises_when_no_token(make_service):
-    service, _ = make_service(responses=[], oauth_token=None)
-    with pytest.raises(exceptions.MuralTokenError):
-        await service.search_widgets("user-123", "mural-abc", "hello", None)
-
-
-@pytest.mark.asyncio
-async def test_search_widgets_by_text_returns_matching(make_service):
-    note1 = _sticky("sn1", text="Hello World")
-    note2 = _sticky("sn2", text="Something else")
-    service, _ = make_service(
-        responses=[httpx.Response(200, json={"value": [note1, note2]})]
-    )
-    result = await service.search_widgets("user-123", "mural-abc", "hello", None)
-    assert result is not None
-    assert "sn1" in result
-    assert "sn2" not in result
-
-
-@pytest.mark.asyncio
-async def test_search_widgets_by_type(make_service):
-    note = _sticky("sn1", text="A sticky")
-    area = _area("a1", "An area")
-    service, _ = make_service(
-        responses=[httpx.Response(200, json={"value": [note, area]})]
-    )
-    result = await service.search_widgets("user-123", "mural-abc", None, "area")
-    assert result is not None
-    assert "a1" in result
-    assert "sn1" not in result
-
-
-@pytest.mark.asyncio
-async def test_search_widgets_no_match_returns_message(make_service):
-    note = _sticky("sn1", text="Nothing relevant")
-    service, _ = make_service(responses=[httpx.Response(200, json={"value": [note]})])
-    result = await service.search_widgets(
-        "user-123", "mural-abc", "xyz-not-found", None
-    )
-    assert result == "No widgets matched."
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "call",
-    [
-        lambda service: service.fetch_summary("user-123", "mural-abc"),
-        lambda service: service.fetch_region("user-123", "mural-abc", "region-1"),
-        lambda service: service.fetch_connections("user-123", "mural-abc", "widget-1"),
-        lambda service: service.search_widgets("user-123", "mural-abc", "q", None),
-    ],
-    ids=["fetch_summary", "fetch_region", "fetch_connections", "search_widgets"],
-)
-async def test_denied_guard_blocks_every_public_method_before_any_vendor_call(
-    make_service, call
-):
-    """The guard runs before BoardService talks to Mural at all -- not just
-    before it returns data. A denied user's call must not reach the vendor,
-    not even for a token refresh (FakeOAuthClient never touches the
-    transport either, so any request recorded here would be a real bug).
-    """
-    store = in_memory_board_access_request_store.InMemoryBoardAccessRequestStore()
-    guard = guard_module.AllowListBoardGuard(store)
-    service, transport = make_service(responses=[], guard=guard)
-
-    with pytest.raises(guard_module.ForbiddenBoardError):
-        await call(service)
-
-    assert transport.requests == []
+        assert transport.requests == []

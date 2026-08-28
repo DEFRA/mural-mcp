@@ -1,6 +1,6 @@
 interactions:
 - request:
-    body: grant_type=refresh_token&refresh_token=refresh_token_123&client_id=test_client_id&client_secret=[FILTERED]
+    body: grant_type=refresh_token&refresh_token=[FILTERED]&client_id=test_client_id&client_secret=[FILTERED]
     headers:
       accept:
       - '*/*'
@@ -20,7 +20,7 @@ interactions:
     uri: https://app.mural.co/api/public/v1/authorization/oauth2/token
   response:
     body:
-      string: '{"access_token":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLTEyMyIsImlhdCI6MTc3NTk1MDEwMCwiZXhwIjoxNzc1OTUzNzAwfQ.new_fake_signature","refresh_token":"refresh_token_123","token_type":"Bearer","expires_in":3600}'
+      string: '{"access_token":"[FILTERED]","refresh_token":"[FILTERED]","token_type":"Bearer","expires_in":3600}'
     headers:
       content-type:
       - application/json
