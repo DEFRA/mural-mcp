@@ -11,6 +11,15 @@ from tests.support import vcr_config
 
 pytest_plugins = ["tests.support.mongo"]
 
+# MuralConfig has no defaults for these (real credentials are secrets), so
+# pydantic-settings fails to construct it — and thus AppConfig, via its
+# default_factory — wherever a test builds one without going through
+# `fake_config`/`model_construct`. setdefault so real CI-configured values
+# still win; these never need to be un-set.
+os.environ.setdefault("MURAL_CLIENT_ID", "test-client-id")
+os.environ.setdefault("MURAL_CLIENT_SECRET", "example-secret")
+os.environ.setdefault("MURAL_CALLBACK_PATH", "/callback")
+
 vcr_instance = vcr_module.VCR(
     cassette_library_dir="tests/cassettes",
     record_mode=os.getenv("VCR_RECORD_MODE", "none"),
@@ -32,7 +41,7 @@ def fake_config() -> app_config.AppConfig:
     mural_cfg = app_config.MuralConfig.model_construct(
         api_base="https://app.mural.co/api",
         client_id="test-client-id",
-        client_secret=pydantic.SecretStr("test-secret"),
+        client_secret=pydantic.SecretStr("example-secret"),
         callback_path="/callback",
     )
     return app_config.AppConfig.model_construct(
