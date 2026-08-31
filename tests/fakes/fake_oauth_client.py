@@ -1,4 +1,4 @@
-from app.mural.connectivity import exceptions
+from app.integration.linking import exceptions
 
 
 class FakeOAuthClient:

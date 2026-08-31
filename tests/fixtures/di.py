@@ -3,13 +3,17 @@ from collections.abc import AsyncIterator
 
 import dishka
 
-from app.auth import service as bearer_service
-from app.mural.board import registry as widget_registry
-from app.mural.board.renderers import msx as widget_msx
-from app.mural.board.summary import renderer as summary_renderer
-from app.mural.connectivity import ports as token_store
-from app.mural.connectivity import state_store
-from tests.fakes import in_memory_bearer_service, in_memory_token_store
+from app.integration.linking import ports as token_store
+from app.integration.mural import guard as guard_module
+from app.integration.mural import ports as approval_ports
+from app.integration.mural.board import registry as widget_registry
+from app.integration.mural.board.renderers import msx as widget_msx
+from app.integration.mural.board.summary import renderer as summary_renderer
+from tests.fakes import (
+    in_memory_board_access_request_store,
+    in_memory_oauth_state_store,
+    in_memory_token_store,
+)
 
 
 class TestProvider(dishka.Provider):
@@ -22,12 +26,18 @@ class TestProvider(dishka.Provider):
         return in_memory_token_store.InMemoryTokenStore()
 
     @dishka.provide
-    def provide_bearer_service(self) -> bearer_service.BearerTokenService:
-        return in_memory_bearer_service.InMemoryBearerTokenService()
+    def provide_board_access_request_store(
+        self,
+    ) -> approval_ports.BoardAccessRequestStore:
+        return in_memory_board_access_request_store.InMemoryBoardAccessRequestStore()
 
     @dishka.provide
-    def provide_state_store(self) -> state_store.OAuthStateStore:
-        return state_store.OAuthStateStore()
+    def provide_board_guard(self) -> guard_module.BoardGuard:
+        return guard_module.AllowAllBoardGuard()
+
+    @dishka.provide
+    def provide_state_store(self) -> token_store.OAuthStateStore:
+        return in_memory_oauth_state_store.InMemoryOAuthStateStore()
 
     @dishka.provide
     def provide_registry(self) -> widget_registry.WidgetRendererRegistry:

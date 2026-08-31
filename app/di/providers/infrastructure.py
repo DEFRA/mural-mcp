@@ -30,10 +30,12 @@ class InfrastructureProvider(dishka.Provider):
                 "Creating MongoDB client with custom TLS cert %s",
                 config.mongo_truststore,
             )
-            client = pymongo.AsyncMongoClient(config.mongo_uri, tlsCAFile=cert)
+            client = pymongo.AsyncMongoClient(
+                config.mongo_uri, tlsCAFile=cert, tz_aware=True
+            )
         else:
             logger.info("Creating MongoDB client")
-            client = pymongo.AsyncMongoClient(config.mongo_uri)
+            client = pymongo.AsyncMongoClient(config.mongo_uri, tz_aware=True)
 
         logger.info("Testing MongoDB connection to %s", config.mongo_uri)
         await mongo.check_connection(client, config.mongo_database)
