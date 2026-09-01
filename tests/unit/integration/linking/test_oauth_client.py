@@ -12,7 +12,7 @@ from tests.fakes import httpx_helpers, in_memory_token_store
 
 def _make_oauth(
     config: app_config.AppConfig,
-    responses: list[httpx.Response],
+    responses: list[httpx.Response | Exception],
     tokens: in_memory_token_store.InMemoryTokenStore | None = None,
 ) -> tuple[oauth_client_module.OAuthClient, httpx_helpers.MockTransport]:
     client, transport = httpx_helpers.make_mock_client(responses)
@@ -123,7 +123,9 @@ class TestGetValidToken:
         result = await client_obj.get_valid_token("user-123")
 
         assert result == "example-new-access-token"
+
         stored = await store.get_tokens("user-123")
+
         assert stored is not None
         assert stored.access_token == "example-new-access-token"
         assert stored.refresh_token == "example-new-refresh-token"
@@ -132,14 +134,17 @@ class TestGetValidToken:
 class TestExchangeCode:
     async def test_raises_mural_api_error_on_http_error(self, fake_config):
         client_obj, _ = _make_oauth(fake_config, [httpx.Response(400)])
+
         with pytest.raises(exceptions.MuralApiError) as exc_info:
             await client_obj.exchange_code("bad-code")
+
         assert exc_info.value.status_code == 400
 
     async def test_raises_mural_unavailable_error_when_unreachable(self, fake_config):
         client_obj, _ = _make_oauth(
             fake_config, [httpx.ConnectError("Connection refused")]
         )
+
         with pytest.raises(exceptions.MuralUnavailableError):
             await client_obj.exchange_code("bad-code")
 
