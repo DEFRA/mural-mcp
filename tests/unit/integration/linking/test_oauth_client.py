@@ -38,7 +38,7 @@ def oauth(fake_config):
 
 class TestRedirectUri:
     def test_joins_base_url_and_callback_path(self, oauth):
-        assert oauth.redirect_uri == "http://example.com/callback"
+        assert oauth.redirect_uri == "/callback"
 
     def test_strips_trailing_slash_from_base_url(self):
         config = app_config.AppConfig.model_construct(
@@ -53,15 +53,16 @@ class TestRedirectUri:
             client=client,
             tokens=in_memory_token_store.InMemoryTokenStore(),
         )
-        assert client_obj.redirect_uri == "http://example.com/callback"
+        assert client_obj.redirect_uri == "/callback"
 
 
 class TestBuildAuthorizationUrl:
     def test_includes_state(self, oauth):
         url = oauth.build_authorization_url("my-state-token")
+
         assert "state=my-state-token" in url
         assert "client_id=test-client-id" in url
-        assert "redirect_uri=http%3A%2F%2Fexample.com%2Fcallback" in url
+        assert "redirect_uri=%2Fcallback" in url
         assert url.startswith(
             "https://app.mural.co/api/public/v1/authorization/oauth2/"
         )
@@ -129,9 +130,17 @@ class TestGetValidToken:
 
 
 class TestExchangeCode:
-    async def test_raises_on_http_error(self, fake_config):
+    async def test_raises_mural_api_error_on_http_error(self, fake_config):
         client_obj, _ = _make_oauth(fake_config, [httpx.Response(400)])
-        with pytest.raises(httpx.HTTPStatusError):
+        with pytest.raises(exceptions.MuralApiError) as exc_info:
+            await client_obj.exchange_code("bad-code")
+        assert exc_info.value.status_code == 400
+
+    async def test_raises_mural_unavailable_error_when_unreachable(self, fake_config):
+        client_obj, _ = _make_oauth(
+            fake_config, [httpx.ConnectError("Connection refused")]
+        )
+        with pytest.raises(exceptions.MuralUnavailableError):
             await client_obj.exchange_code("bad-code")
 
 
@@ -157,3 +166,16 @@ class TestRefresh:
         )
         token = await client_obj.refresh("original-refresh")
         assert token.refresh_token == "new-refresh"
+
+    async def test_raises_mural_api_error_on_http_error(self, fake_config):
+        client_obj, _ = _make_oauth(fake_config, [httpx.Response(401)])
+        with pytest.raises(exceptions.MuralApiError) as exc_info:
+            await client_obj.refresh("original-refresh")
+        assert exc_info.value.status_code == 401
+
+    async def test_raises_mural_unavailable_error_when_unreachable(self, fake_config):
+        client_obj, _ = _make_oauth(
+            fake_config, [httpx.ConnectError("Connection refused")]
+        )
+        with pytest.raises(exceptions.MuralUnavailableError):
+            await client_obj.refresh("original-refresh")

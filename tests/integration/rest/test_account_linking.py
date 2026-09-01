@@ -110,3 +110,97 @@ class TestStatus:
             data = response.json()
             assert data["linked"] is True
             assert data["accessTokenExpiresAt"] is not None
+
+
+class TestTestConnection:
+    def test_returns_401_if_not_linked(self):
+        with rest_client() as (client, _overrides):
+            response = client.get("/linking/test-connection", headers=_headers())
+
+            assert response.status_code == 401
+            assert "does not have a valid access token" in response.json()["detail"]
+
+    def test_returns_200_if_linked_and_mural_accepts_token(self):
+        """When the user is linked and Mural's /users/me call succeeds."""
+        mural_responses = [
+            _MURAL_TOKEN_RESPONSE,  # for the callback (storing the token)
+            httpx.Response(
+                200, json={"value": {"id": "mural_u123"}}
+            ),  # for test-connection
+        ]
+        with rest_client(responses=mural_responses) as (client, overrides):
+            _seed_user(client, overrides, user_id="usr_abc", external_id=_EXTERNAL_ID)
+            state = seed(client, overrides.states.issue, "usr_abc")
+            # Link the account first
+            client.get(
+                "/linking/callback",
+                params={"code": "auth-code", "state": state},
+                headers=_headers(),
+            )
+
+            response = client.get("/linking/test-connection", headers=_headers())
+
+            assert response.status_code == 200
+            assert response.json() == {"status": "success"}
+
+    def test_returns_401_if_mural_rejects_token(self):
+        """When the user is linked but Mural returns 401 (token revoked/expired)."""
+        mural_responses = [
+            _MURAL_TOKEN_RESPONSE,  # for the callback
+            httpx.Response(401),  # for test-connection (Mural rejects the token)
+        ]
+        with rest_client(responses=mural_responses) as (client, overrides):
+            _seed_user(client, overrides, user_id="usr_abc", external_id=_EXTERNAL_ID)
+            state = seed(client, overrides.states.issue, "usr_abc")
+            client.get(
+                "/linking/callback",
+                params={"code": "auth-code", "state": state},
+                headers=_headers(),
+            )
+
+            response = client.get("/linking/test-connection", headers=_headers())
+
+            assert response.status_code == 401
+            assert "rejected the access token" in response.json()["detail"]
+
+    def test_returns_502_if_mural_server_error(self):
+        """When Mural returns a 5xx error."""
+        mural_responses = [
+            _MURAL_TOKEN_RESPONSE,  # for the callback
+            httpx.Response(500),  # for test-connection (Mural server error)
+        ]
+        with rest_client(responses=mural_responses) as (client, overrides):
+            _seed_user(client, overrides, user_id="usr_abc", external_id=_EXTERNAL_ID)
+            state = seed(client, overrides.states.issue, "usr_abc")
+            client.get(
+                "/linking/callback",
+                params={"code": "auth-code", "state": state},
+                headers=_headers(),
+            )
+
+            response = client.get("/linking/test-connection", headers=_headers())
+
+            assert response.status_code == 502
+            # MuralApiError includes the status code in its message
+            assert "status" in response.json()["detail"].lower()
+
+    def test_returns_502_if_mural_is_unreachable(self):
+        """When the request to Mural fails before any response is received
+        (e.g. Mural is down, DNS failure, connection timeout)."""
+        mural_responses = [
+            _MURAL_TOKEN_RESPONSE,  # for the callback
+            httpx.ConnectError("Connection refused"),  # for test-connection
+        ]
+        with rest_client(responses=mural_responses) as (client, overrides):
+            _seed_user(client, overrides, user_id="usr_abc", external_id=_EXTERNAL_ID)
+            state = seed(client, overrides.states.issue, "usr_abc")
+            client.get(
+                "/linking/callback",
+                params={"code": "auth-code", "state": state},
+                headers=_headers(),
+            )
+
+            response = client.get("/linking/test-connection", headers=_headers())
+
+            assert response.status_code == 502
+            assert response.json() == {"detail": "Mural API is unreachable"}

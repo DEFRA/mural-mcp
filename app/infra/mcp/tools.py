@@ -18,6 +18,10 @@ def _mural_api_error(err: exceptions.MuralApiError) -> ToolError:
     return ToolError(f"Mural API request failed with status {err.status_code}.")
 
 
+def _mural_unavailable_error() -> ToolError:
+    return ToolError("Mural API is unreachable. Please try again later.")
+
+
 def _forbidden_board_error(err: guard_module.ForbiddenBoardError) -> ToolError:
     return ToolError(str(err))
 
@@ -43,6 +47,8 @@ async def get_board_summary(
         )
     except exceptions.MuralTokenError as err:
         raise _mural_token_error() from err
+    except exceptions.MuralUnavailableError as err:
+        raise _mural_unavailable_error() from err
     except exceptions.MuralApiError as err:
         raise _mural_api_error(err) from err
     except guard_module.ForbiddenBoardError as err:
@@ -65,6 +71,8 @@ async def get_region(
         )
     except exceptions.MuralTokenError as err:
         raise _mural_token_error() from err
+    except exceptions.MuralUnavailableError as err:
+        raise _mural_unavailable_error() from err
     except exceptions.MuralApiError as err:
         raise _mural_api_error(err) from err
     except guard_module.ForbiddenBoardError as err:
@@ -86,6 +94,8 @@ async def get_connections(
         return await board.fetch_connections(principal.user_id, mural_id, widget_id)
     except exceptions.MuralTokenError as err:
         raise _mural_token_error() from err
+    except exceptions.MuralUnavailableError as err:
+        raise _mural_unavailable_error() from err
     except exceptions.MuralApiError as err:
         raise _mural_api_error(err) from err
     except guard_module.ForbiddenBoardError as err:
@@ -114,6 +124,8 @@ async def find_widgets(
         )
     except exceptions.MuralTokenError as err:
         raise _mural_token_error() from err
+    except exceptions.MuralUnavailableError as err:
+        raise _mural_unavailable_error() from err
     except exceptions.MuralApiError as err:
         raise _mural_api_error(err) from err
     except guard_module.ForbiddenBoardError as err:
