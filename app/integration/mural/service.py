@@ -134,11 +134,15 @@ class BoardService:
         all_widgets: list[dict[str, Any]] = []
 
         while url:
-            response = await self._client.get(
-                url,
-                params=next_params,
-                headers={"Authorization": f"Bearer {access_token}"},
-            )
+            try:
+                response = await self._client.get(
+                    url,
+                    params=next_params,
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+            except httpx.RequestError as exc:
+                raise exceptions.MuralUnavailableError(str(exc)) from exc
+
             try:
                 response.raise_for_status()
             except httpx.HTTPStatusError as exc:

@@ -8,6 +8,7 @@ from app.common import http_client, request_context
 from app.integration.linking import oauth_client
 from app.integration.linking import ports as token_store
 from app.integration.linking import service as linking_service
+from app.integration.mural import connection_test_service
 from app.integration.mural import guard as guard_module
 from app.integration.mural import service as board_service
 from app.integration.mural.board.renderers import msx as widget_msx
@@ -55,6 +56,19 @@ class RequestScopeProvider(dishka.Provider):
         states: token_store.OAuthStateStore,
     ) -> linking_service.LinkingService:
         return linking_service.LinkingService(oauth=oauth, tokens=tokens, states=states)
+
+    @dishka.provide
+    def provide_mural_connection_test_service(
+        self,
+        config: app_config.AppConfig,
+        client: httpx.AsyncClient,
+        oauth: oauth_client.OAuthClient,
+    ) -> connection_test_service.MuralConnectionTestService:
+        return connection_test_service.MuralConnectionTestService(
+            config=config,
+            client=client,
+            oauth=oauth,
+        )
 
     @dishka.provide
     def provide_board_service(

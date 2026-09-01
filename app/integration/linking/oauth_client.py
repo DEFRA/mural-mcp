@@ -35,8 +35,7 @@ class OAuthClient:
 
     @property
     def redirect_uri(self) -> str:
-        base = str(self._config.base_url).rstrip("/")
-        return base + self._config.mural_config.callback_path
+        return self._config.mural_config.callback_path
 
     @property
     def _token_url(self) -> str:
@@ -73,33 +72,47 @@ class OAuthClient:
     async def exchange_code(self, code: str) -> models.MuralToken:
         mural_config = self._config.mural_config
 
-        response = await self._client.post(
-            self._token_url,
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": self.redirect_uri,
-                "client_id": mural_config.client_id,
-                "client_secret": mural_config.client_secret.get_secret_value(),
-            },
-        )
-        response.raise_for_status()
+        try:
+            response = await self._client.post(
+                self._token_url,
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": self.redirect_uri,
+                    "client_id": mural_config.client_id,
+                    "client_secret": mural_config.client_secret.get_secret_value(),
+                },
+            )
+        except httpx.RequestError as exc:
+            raise exceptions.MuralUnavailableError(str(exc)) from exc
+
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise exceptions.MuralApiError(response.status_code) from exc
 
         return self._to_token(response.json(), fallback_refresh_token="")
 
     async def refresh(self, refresh_token_value: str) -> models.MuralToken:
         mural_config = self._config.mural_config
 
-        response = await self._client.post(
-            self._token_url,
-            data={
-                "grant_type": "refresh_token",
-                "refresh_token": refresh_token_value,
-                "client_id": mural_config.client_id,
-                "client_secret": mural_config.client_secret.get_secret_value(),
-            },
-        )
-        response.raise_for_status()
+        try:
+            response = await self._client.post(
+                self._token_url,
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": refresh_token_value,
+                    "client_id": mural_config.client_id,
+                    "client_secret": mural_config.client_secret.get_secret_value(),
+                },
+            )
+        except httpx.RequestError as exc:
+            raise exceptions.MuralUnavailableError(str(exc)) from exc
+
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise exceptions.MuralApiError(response.status_code) from exc
 
         return self._to_token(
             response.json(), fallback_refresh_token=refresh_token_value

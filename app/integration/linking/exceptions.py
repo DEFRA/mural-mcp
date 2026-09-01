@@ -23,3 +23,13 @@ class MuralApiError(Exception):
     def __init__(self, status_code: int) -> None:
         self.status_code = status_code
         super().__init__(f"Mural API request failed with status {status_code}.")
+
+
+class MuralUnavailableError(Exception):
+    """Raised when a request to the Mural API fails before any response is
+    received (e.g. Mural is unreachable, DNS resolution fails, or the
+    connection times out).
+
+    Wraps the underlying httpx.RequestError, distinct from MuralApiError
+    which means Mural *did* respond, just with a non-2xx status.
+    """

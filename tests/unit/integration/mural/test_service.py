@@ -25,7 +25,7 @@ def make_service(fake_config):
 
     def _factory(
         *,
-        responses: list[httpx.Response],
+        responses: list[httpx.Response | Exception],
         oauth_token: str | None = "valid-token",
         guard: guard_module.BoardGuard | None = None,
     ) -> tuple[board_service.BoardService, httpx_helpers.MockTransport]:
@@ -224,6 +224,13 @@ class TestFetchSummary:
     async def test_raises_when_no_token(self, make_service):
         service, _ = make_service(responses=[], oauth_token=None)
         with pytest.raises(exceptions.MuralTokenError):
+            await service.fetch_summary("user-123", "mural-abc")
+
+    async def test_wraps_an_unreachable_mural(self, make_service):
+        """A connection failure (Mural down, DNS failure, timeout) must be
+        wrapped in MuralUnavailableError, not left as a raw httpx error."""
+        service, _ = make_service(responses=[httpx.ConnectError("Connection refused")])
+        with pytest.raises(exceptions.MuralUnavailableError):
             await service.fetch_summary("user-123", "mural-abc")
 
     async def test_returns_region_for_area_widget(self, make_service):

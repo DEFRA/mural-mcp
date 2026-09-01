@@ -140,7 +140,7 @@ def real_config(**field_overrides: object) -> app_config.AppConfig:
 def _build_container(
     *,
     cfg: app_config.AppConfig,
-    responses: list[httpx.Response],
+    responses: list[httpx.Response | Exception],
     tokens: linking_ports.TokenStore | None,
     states: linking_ports.OAuthStateStore | None,
     access_requests: mural_ports.BoardAccessRequestStore | None,
@@ -189,7 +189,7 @@ def _build_container(
 def rest_client(
     *,
     cfg: app_config.AppConfig | None = None,
-    responses: list[httpx.Response] | None = None,
+    responses: list[httpx.Response | Exception] | None = None,
     tokens: linking_ports.TokenStore | None = None,
     states: linking_ports.OAuthStateStore | None = None,
     access_requests: mural_ports.BoardAccessRequestStore | None = None,
@@ -279,7 +279,7 @@ def _asgi_httpx_client_factory(
 async def mcp_client(
     *,
     cfg: app_config.AppConfig | None = None,
-    responses: list[httpx.Response] | None = None,
+    responses: list[httpx.Response | Exception] | None = None,
     tokens: linking_ports.TokenStore | None = None,
     states: linking_ports.OAuthStateStore | None = None,
     access_requests: mural_ports.BoardAccessRequestStore | None = None,
