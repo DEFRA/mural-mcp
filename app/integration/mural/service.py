@@ -5,17 +5,14 @@ import httpx
 from app import config as app_config
 from app.integration.linking import exceptions, oauth_client
 from app.integration.mural import guard as guard_module
-from app.integration.mural.board import exceptions as board_exceptions
-from app.integration.mural.board.renderers import msx as msx_renderer
-from app.integration.mural.board.summary import builder as summary_builder
-from app.integration.mural.board.summary import renderer as summary_renderer
-from app.integration.mural.board.widgets import builder, nodes
-from app.integration.mural.board.widgets.strategies import (
-    base as strategy_base,
-)
-from app.integration.mural.board.widgets.strategies import (
-    spatial as spatial_strategy,
-)
+from app.integration.mural.board import errors as board_exceptions
+from app.integration.mural.board.parsing import grouping as strategy_base
+from app.integration.mural.board.parsing import models as nodes
+from app.integration.mural.board.parsing import parser
+from app.integration.mural.board.parsing import spatial as spatial_strategy
+from app.integration.mural.board.parsing import summary as summary_builder
+from app.integration.mural.board.rendering import msx as msx_renderer
+from app.integration.mural.board.rendering import summary as summary_renderer
 
 
 def _widget_text_fields(widget: nodes.AnyWidget) -> list[str]:
@@ -50,13 +47,11 @@ class BoardService:
         user_id: str,
         mural_id: str,
         strategy: strategy_base.GroupingStrategy | None = None,
-    ) -> tuple[list[nodes.AnyWidget], builder.WidgetTree]:
+    ) -> tuple[list[nodes.AnyWidget], nodes.WidgetTree]:
         await self._guard.check(user_id, mural_id)
         access_token = await self._oauth.get_valid_token(user_id)
         raw = await self._fetch_widgets(mural_id, access_token)
-        parsed = nodes.parse_widgets(raw)
-        tree = builder.WidgetTree.build(parsed, strategy)
-        return parsed, tree
+        return parser.parse_board(raw, strategy)
 
     async def fetch_summary(
         self, user_id: str, mural_id: str, use_spatial_grouping: bool = False

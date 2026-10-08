@@ -11,8 +11,8 @@ from app.integration.linking import service as linking_service
 from app.integration.mural import connection_test_service
 from app.integration.mural import guard as guard_module
 from app.integration.mural import service as board_service
-from app.integration.mural.board.renderers import msx as widget_msx
-from app.integration.mural.board.summary import renderer as summary_renderer
+from app.integration.mural.board.rendering import msx as widget_msx
+from app.integration.mural.board.rendering import summary as summary_renderer
 
 
 class RequestScopeProvider(dishka.Provider):

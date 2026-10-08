@@ -1,6 +1,5 @@
-from app.integration.mural.board.widgets import nodes
-from app.integration.mural.board.widgets import schemas as widgets
-from app.integration.mural.board.widgets.strategies import parent_id, spatial
+from app.integration.mural.board.parsing import models, parent_id, spatial
+from app.integration.mural.board.parsing import schemas as widgets
 
 
 def create_sticky_widget(
@@ -270,7 +269,7 @@ class TestSpatialGroupingStrategy:
         assert result.spatial_group_nodes
         group_id = next(iter(result.spatial_group_nodes))
         assert set(result.adjacency.get(group_id, [])) == {"a", "b"}
-        assert isinstance(result.spatial_group_nodes[group_id], nodes.SpatialGroupNode)
+        assert isinstance(result.spatial_group_nodes[group_id], models.SpatialGroupNode)
 
     def test_slug_lands_above_the_correct_screen(self) -> None:
         # Two screens side by side, each with its own slug above it. Slug

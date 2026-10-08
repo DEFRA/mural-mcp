@@ -1,8 +1,7 @@
-import pydantic
 import pytest
 
-from app.integration.mural.board.widgets import nodes
-from app.integration.mural.board.widgets import schemas as widgets
+from app.integration.mural.board.parsing import errors, parser
+from app.integration.mural.board.parsing import schemas as widgets
 
 
 class TestParseWidgets:
@@ -45,7 +44,7 @@ class TestParseWidgets:
             },
             "text": "Test note",
         }
-        parsed = nodes.parse_widgets([raw])
+        parsed = parser.parse_widgets([raw])
         assert len(parsed) == 1
         assert isinstance(parsed[0], widgets.StickyNoteWidget)
         assert parsed[0].title == "Note"
@@ -120,7 +119,7 @@ class TestParseWidgets:
             "contentEditedOn": 1234567890,
             "style": {"color": "#0F766EFF"},
         }
-        parsed = nodes.parse_widgets([shape_raw, icon_raw])
+        parsed = parser.parse_widgets([shape_raw, icon_raw])
         assert len(parsed) == 2
         assert isinstance(parsed[0], widgets.ShapeWidget)
         assert isinstance(parsed[1], widgets.IconWidget)
@@ -150,5 +149,5 @@ class TestParseWidgets:
             "contentEditedBy": {"id": "user1"},
             "contentEditedOn": 1234567890,
         }
-        with pytest.raises(pydantic.ValidationError):
-            nodes.parse_widgets([raw])
+        with pytest.raises(errors.BoardParseError):
+            parser.parse_widgets([raw])

@@ -1,29 +1,28 @@
 import dataclasses
 from collections.abc import Sequence
 
-from app.integration.mural.board.summary import nodes
-from app.integration.mural.board.widgets import builder as widget_tree_builder
-from app.integration.mural.board.widgets import nodes as widget_tree_nodes
-from app.integration.mural.board.widgets import schemas as widget_schemas
+from app.integration.mural.board.parsing import models
+from app.integration.mural.board.parsing import schemas as widget_schemas
+
+# A sticky, shape or text at this font size or above is a region heading.
+_HEADING_FONT_SIZE = 80
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class BoardSummary:
-    root: nodes.BoardSummaryNode
-    regions: list[nodes.RegionNode]
+    root: models.BoardSummaryNode
+    regions: list[models.RegionNode]
 
     @classmethod
-    def build(
-        cls, tree: widget_tree_builder.WidgetTree, mural_id: str
-    ) -> "BoardSummary":
-        regions: list[nodes.RegionNode] = []
+    def build(cls, tree: models.WidgetTree, mural_id: str) -> "BoardSummary":
+        regions: list[models.RegionNode] = []
 
         for root_id in tree.adjacency.get(None, []):
             node = tree.resolve(root_id)
 
             if isinstance(node, widget_schemas.AreaWidget):
                 regions.append(
-                    nodes.RegionNode(
+                    models.RegionNode(
                         id=root_id,
                         label=node.title or "",
                         count=cls._count_descendants(tree, root_id),
@@ -33,7 +32,7 @@ class BoardSummary:
                         height=node.height,
                     )
                 )
-            elif isinstance(node, widget_tree_nodes.SpatialGroupNode):
+            elif isinstance(node, models.SpatialGroupNode):
                 child_ids = tree.adjacency.get(root_id, [])
                 raw_children = [
                     tree.resolve(cid) for cid in child_ids if cid in tree.nodes
@@ -47,7 +46,7 @@ class BoardSummary:
                     else (node.centroid_x, node.centroid_y, 0.0, 0.0)
                 )
                 regions.append(
-                    nodes.RegionNode(
+                    models.RegionNode(
                         id=root_id,
                         label=cls._infer_label(tree, root_id),
                         count=len(child_ids),
@@ -58,10 +57,10 @@ class BoardSummary:
                     )
                 )
 
-        return cls(root=nodes.BoardSummaryNode(id=mural_id), regions=regions)
+        return cls(root=models.BoardSummaryNode(id=mural_id), regions=regions)
 
     @staticmethod
-    def _count_descendants(tree: widget_tree_builder.WidgetTree, node_id: str) -> int:
+    def _count_descendants(tree: models.WidgetTree, node_id: str) -> int:
         child_ids = tree.adjacency.get(node_id, [])
         return len(child_ids) + sum(
             BoardSummary._count_descendants(tree, cid) for cid in child_ids
@@ -78,7 +77,7 @@ class BoardSummary:
         return min_x, min_y, max_x - min_x, max_y - min_y
 
     @staticmethod
-    def _infer_label(tree: widget_tree_builder.WidgetTree, node_id: str) -> str:
+    def _infer_label(tree: models.WidgetTree, node_id: str) -> str:
         child_ids = tree.adjacency.get(node_id, [])
         children = [tree.resolve(cid) for cid in child_ids]
         for child in children:
@@ -86,13 +85,13 @@ class BoardSummary:
                 isinstance(
                     child, widget_schemas.StickyNoteWidget | widget_schemas.ShapeWidget
                 )
-                and child.style.font_size >= 80
+                and child.style.font_size >= _HEADING_FONT_SIZE
             ):
                 return child.text or child.title or ""
             if (
                 isinstance(child, widget_schemas.TextWidget)
                 and child.style.font_size is not None
-                and child.style.font_size >= 80
+                and child.style.font_size >= _HEADING_FONT_SIZE
             ):
                 return child.text or child.title or ""
         for child in children:

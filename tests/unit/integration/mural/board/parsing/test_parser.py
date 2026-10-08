@@ -1,5 +1,5 @@
-from app.integration.mural.board.widgets import builder
-from app.integration.mural.board.widgets import schemas as widgets
+from app.integration.mural.board.parsing import parser
+from app.integration.mural.board.parsing import schemas as widgets
 
 
 def create_sticky_widget(
@@ -48,7 +48,7 @@ def create_sticky_widget(
 
 class TestBuild:
     def test_empty_tree(self) -> None:
-        tree = builder.WidgetTree.build([])
+        tree = parser.build_tree([])
         assert tree.nodes == {}
         assert tree.row_nodes == {}
         assert tree.col_nodes == {}
@@ -56,7 +56,7 @@ class TestBuild:
 
     def test_single_widget(self) -> None:
         widget = create_sticky_widget("w1")
-        tree = builder.WidgetTree.build([widget])
+        tree = parser.build_tree([widget])
         assert tree.nodes["w1"] == widget
         assert tree.adjacency[None] == ["w1"]
         assert tree.adjacency.get("w1", []) == []
@@ -65,7 +65,7 @@ class TestBuild:
         parent = create_sticky_widget("parent", parent_id=None)
         child1 = create_sticky_widget("child1", parent_id="parent")
         child2 = create_sticky_widget("child2", parent_id="parent")
-        tree = builder.WidgetTree.build([parent, child1, child2])
+        tree = parser.build_tree([parent, child1, child2])
         assert tree.adjacency[None] == ["parent"]
         assert set(tree.adjacency["parent"]) == {"child1", "child2"}
 
@@ -73,7 +73,7 @@ class TestBuild:
 class TestResolve:
     def test_resolve_widget_by_id(self) -> None:
         widget = create_sticky_widget("w1")
-        tree = builder.WidgetTree.build([widget])
+        tree = parser.build_tree([widget])
         resolved = tree.resolve("w1")
         assert resolved == widget
 
@@ -81,7 +81,7 @@ class TestResolve:
 class TestChildren:
     def test_returns_empty_for_leaf(self) -> None:
         widget = create_sticky_widget("w1")
-        tree = builder.WidgetTree.build([widget])
+        tree = parser.build_tree([widget])
         children = tree.children("w1")
         assert children == []
 
@@ -89,7 +89,7 @@ class TestChildren:
         parent = create_sticky_widget("parent", parent_id=None)
         child1 = create_sticky_widget("child1", parent_id="parent")
         child2 = create_sticky_widget("child2", parent_id="parent")
-        tree = builder.WidgetTree.build([parent, child1, child2])
+        tree = parser.build_tree([parent, child1, child2])
         children = tree.children("parent")
         assert len(children) == 2
         child_ids = {c.id for c in children}
@@ -100,7 +100,7 @@ class TestStr:
     def test_string_representation_includes_root_and_widget_type(self) -> None:
         parent = create_sticky_widget("parent", parent_id=None)
         child = create_sticky_widget("child", parent_id="parent")
-        tree = builder.WidgetTree.build([parent, child])
+        tree = parser.build_tree([parent, child])
         tree_str = str(tree)
         assert "<root>" in tree_str
         assert "sticky note" in tree_str

@@ -1,9 +1,8 @@
 from collections.abc import Callable
 from typing import Any
 
-from app.integration.mural.board.summary import nodes as summary_nodes
-from app.integration.mural.board.widgets import nodes
-from app.integration.mural.board.widgets import schemas as widgets
+from app.integration.mural.board.parsing import models
+from app.integration.mural.board.parsing import schemas as widgets
 
 type AttrExtractor = Callable[[Any], dict[str, str]]
 type ContentExtractor = Callable[[Any], str | None]
@@ -61,13 +60,13 @@ def build_default_registry() -> WidgetRendererRegistry:
     reg = WidgetRendererRegistry()
 
     reg.register(
-        summary_nodes.BoardSummaryNode,
+        models.BoardSummaryNode,
         tag="BoardSummary",
         attrs=lambda n: {"mural_id": n.id},
     )
 
     reg.register(
-        summary_nodes.RegionNode,
+        models.RegionNode,
         tag="Region",
         attrs=lambda n: {
             "id": n.id,
@@ -81,19 +80,19 @@ def build_default_registry() -> WidgetRendererRegistry:
     )
 
     reg.register(
-        nodes.TableRowNode,
+        models.TableRowNode,
         tag="Row",
         attrs=lambda n: {"id": n.id},
     )
 
     reg.register(
-        nodes.TableColumnNode,
+        models.TableColumnNode,
         tag="Column",
         attrs=lambda n: {"id": n.id},
     )
 
     reg.register(
-        nodes.SpatialGroupNode,
+        models.SpatialGroupNode,
         tag="Group",
         attrs=lambda n: {
             "id": n.id,

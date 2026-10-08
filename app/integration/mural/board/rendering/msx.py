@@ -1,8 +1,10 @@
 from collections.abc import Iterable
 
-from app.integration.mural.board import registry
-from app.integration.mural.board.widgets import builder, nodes
-from app.integration.mural.board.widgets import schemas as widget_schemas
+from app.integration.mural.board.parsing import models
+from app.integration.mural.board.parsing import schemas as widget_schemas
+from app.integration.mural.board.rendering import registry
+
+_INDENT = "  "
 
 
 def _format_attrs(attrs: dict[str, str]) -> str:
@@ -12,7 +14,7 @@ def _format_attrs(attrs: dict[str, str]) -> str:
 
 
 def render_subtree(
-    tree: builder.WidgetTree,
+    tree: models.WidgetTree,
     root_id: str,
     reg: registry.WidgetRendererRegistry,
 ) -> str:
@@ -20,7 +22,7 @@ def render_subtree(
 
 
 def render_msx(
-    tree: builder.WidgetTree,
+    tree: models.WidgetTree,
     reg: registry.WidgetRendererRegistry,
 ) -> str:
     lines: list[str] = []
@@ -31,7 +33,7 @@ def render_msx(
 
 def _render_node(
     node_id: str,
-    tree: builder.WidgetTree,
+    tree: models.WidgetTree,
     reg: registry.WidgetRendererRegistry,
     indent: int,
 ) -> list[str]:
@@ -41,12 +43,12 @@ def _render_node(
 
     child_ids = tree.adjacency.get(node_id, [])
     content = reg.get_content(node)
-    prefix = "  " * indent
+    prefix = _INDENT * indent
 
     if child_ids or content:
         lines: list[str] = [f"{prefix}<{tag}{attr_str}>"]
         if content:
-            lines.append(f"{prefix}  {content}")
+            lines.append(f"{prefix}{_INDENT}{content}")
         for cid in child_ids:
             lines += _render_node(cid, tree, reg, indent + 1)
         lines.append(f"{prefix}</{tag}>")
@@ -56,16 +58,28 @@ def _render_node(
     return lines
 
 
+def _connection(
+    arrow_id: str,
+    direction: str,
+    role: str,
+    other_id: str,
+    tree: models.WidgetTree,
+) -> str:
+    """One <Connection>; the other end's type is given only if it is on the board."""
+    attrs = f'arrow_id="{arrow_id}" direction="{direction}" {role}_id="{other_id}"'
+    if other_id in tree.nodes:
+        attrs += f' {role}_type="{tree.nodes[other_id].type}"'
+    return f"  <Connection {attrs}/>"
+
+
 class WidgetMsxRenderer:
     def __init__(self, reg: registry.WidgetRendererRegistry) -> None:
         self._reg = reg
 
-    def render_subtree(self, tree: builder.WidgetTree, root_id: str) -> str:
+    def render_subtree(self, tree: models.WidgetTree, root_id: str) -> str:
         return render_subtree(tree, root_id, self._reg)
 
-    def render_widgets(
-        self, widget_ids: Iterable[str], tree: builder.WidgetTree
-    ) -> str:
+    def render_widgets(self, widget_ids: Iterable[str], tree: models.WidgetTree) -> str:
         lines: list[str] = []
         for widget_id in widget_ids:
             lines += _render_node(widget_id, tree, self._reg, indent=0)
@@ -74,8 +88,8 @@ class WidgetMsxRenderer:
     def render_connections(
         self,
         widget_id: str,
-        parsed: list[nodes.AnyWidget],
-        tree: builder.WidgetTree,
+        parsed: list[models.AnyWidget],
+        tree: models.WidgetTree,
     ) -> str:
         connection_lines: list[str] = []
 
@@ -84,23 +98,15 @@ class WidgetMsxRenderer:
                 continue
             if widget.start_ref_id == widget_id and widget.end_ref_id:
                 connection_lines.append(
-                    f'  <Connection arrow_id="{widget.id}" direction="outgoing"'
-                    f' target_id="{widget.end_ref_id}"'
-                    f' target_type="{tree.nodes[widget.end_ref_id].type}"'
-                    f"/>"
-                    if widget.end_ref_id in tree.nodes
-                    else f'  <Connection arrow_id="{widget.id}" direction="outgoing"'
-                    f' target_id="{widget.end_ref_id}"/>'
+                    _connection(
+                        widget.id, "outgoing", "target", widget.end_ref_id, tree
+                    )
                 )
             elif widget.end_ref_id == widget_id and widget.start_ref_id:
                 connection_lines.append(
-                    f'  <Connection arrow_id="{widget.id}" direction="incoming"'
-                    f' source_id="{widget.start_ref_id}"'
-                    f' source_type="{tree.nodes[widget.start_ref_id].type}"'
-                    f"/>"
-                    if widget.start_ref_id in tree.nodes
-                    else f'  <Connection arrow_id="{widget.id}" direction="incoming"'
-                    f' source_id="{widget.start_ref_id}"/>'
+                    _connection(
+                        widget.id, "incoming", "source", widget.start_ref_id, tree
+                    )
                 )
 
         if not connection_lines:

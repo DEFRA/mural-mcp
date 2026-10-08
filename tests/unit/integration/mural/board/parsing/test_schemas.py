@@ -1,7 +1,7 @@
 import pydantic
 import pytest
 
-from app.integration.mural.board.widgets import schemas as widgets
+from app.integration.mural.board.parsing import schemas as widgets
 
 _SHAPE_STYLE_KWARGS = {
     "backgroundColor": "#FFF",

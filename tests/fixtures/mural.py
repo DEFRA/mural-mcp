@@ -5,12 +5,12 @@ VERIFIED against tests/cassettes/mural_get_widgets.yaml -- a real recorded
 response -- for `sticky note`, `shape`, `icon`, `text`, `area` and `comment`
 widgets (see that cassette's two pages for the exact payloads). `arrow` is
 NOT present in that recording; its shape here is inferred from the Mural API
-docs and app.integration.mural.board.widgets.schemas.ArrowWidget, not from a
+docs and app.integration.mural.board.parsing.schemas.ArrowWidget, not from a
 recorded response. If you add another widget type without a cassette entry
 to match, say so in the same way.
 
 Factories return the raw dict shape the vendor sends (what
-app.integration.mural.board.widgets.nodes.parse_widgets consumes). Every
+app.integration.mural.board.parsing.parser.parse_widgets consumes). Every
 factory accepts `**overrides` -- never share a mutable instance between
 tests.
 """
@@ -121,7 +121,7 @@ def arrow(
 ) -> dict[str, Any]:
     """NOT verified against a cassette -- no arrow widget appears in
     tests/cassettes/mural_get_widgets.yaml. Shape inferred from
-    app.integration.mural.board.widgets.schemas.ArrowWidget."""
+    app.integration.mural.board.parsing.schemas.ArrowWidget."""
     widget = base_widget(
         widget_id,
         "arrow",
