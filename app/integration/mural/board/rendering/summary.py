@@ -1,5 +1,5 @@
-from app.integration.mural.board import registry
-from app.integration.mural.board.summary import builder
+from app.integration.mural.board.parsing import summary as summary_builder
+from app.integration.mural.board.rendering import registry
 
 
 def _format_attrs(attrs: dict[str, str]) -> str:
@@ -12,7 +12,7 @@ class SummaryMsxRenderer:
     def __init__(self, reg: registry.WidgetRendererRegistry) -> None:
         self._reg = reg
 
-    def render(self, summary: builder.BoardSummary) -> str:
+    def render(self, summary: summary_builder.BoardSummary) -> str:
         tag = self._reg.get_tag_name(summary.root)
         attrs = _format_attrs(self._reg.get_attrs(summary.root))
 

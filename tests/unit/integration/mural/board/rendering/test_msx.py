@@ -1,7 +1,6 @@
-from app.integration.mural.board import registry
-from app.integration.mural.board.renderers import msx
-from app.integration.mural.board.widgets import builder
-from app.integration.mural.board.widgets import schemas as widgets
+from app.integration.mural.board.parsing import parser
+from app.integration.mural.board.parsing import schemas as widgets
+from app.integration.mural.board.rendering import msx, registry
 
 _REG = registry.build_default_registry()
 
@@ -53,7 +52,7 @@ def create_sticky_widget(
 
 class TestRenderMsx:
     def test_empty_tree(self) -> None:
-        tree = builder.WidgetTree.build([])
+        tree = parser.build_tree([])
         result = msx.render_msx(tree, _REG)
         assert result == ""
 
@@ -61,7 +60,7 @@ class TestRenderMsx:
         """A widget with text is never self-closing -- the text has to live
         somewhere."""
         widget = create_sticky_widget("w1", text="Hello")
-        tree = builder.WidgetTree.build([widget])
+        tree = parser.build_tree([widget])
         result = msx.render_msx(tree, _REG)
         assert 'id="w1"' in result
         assert "</StickyNote>" in result
@@ -72,7 +71,7 @@ class TestRenderMsx:
         merely present."""
         parent = create_sticky_widget("parent", parent_id=None, text="Parent")
         child = create_sticky_widget("child", parent_id="parent", text="Child")
-        tree = builder.WidgetTree.build([parent, child])
+        tree = parser.build_tree([parent, child])
         result = msx.render_msx(tree, _REG)
 
         parent_open = result.index('<StickyNote id="parent"')
@@ -84,14 +83,14 @@ class TestRenderMsx:
     def test_multiple_siblings(self) -> None:
         w1 = create_sticky_widget("w1", text="First")
         w2 = create_sticky_widget("w2", text="Second")
-        tree = builder.WidgetTree.build([w1, w2])
+        tree = parser.build_tree([w1, w2])
         result = msx.render_msx(tree, _REG)
         assert result.count("<StickyNote") == 2
 
     def test_sticky_text_as_inner_content(self) -> None:
         """Sticky note text renders inside the tag, not as an attribute."""
         widget = create_sticky_widget("w1", text="Hello")
-        tree = builder.WidgetTree.build([widget])
+        tree = parser.build_tree([widget])
         result = msx.render_msx(tree, _REG)
         assert 'text="Hello"' not in result
         assert "Hello" in result
@@ -102,7 +101,7 @@ class TestRenderMsx:
         are set."""
         widget = create_sticky_widget("w1", text="plain")
         widget = widget.model_copy(update={"html_text": "<p>rich</p>"})
-        tree = builder.WidgetTree.build([widget])
+        tree = parser.build_tree([widget])
         result = msx.render_msx(tree, _REG)
         assert "<p>rich</p>" in result
         assert "plain" not in result
@@ -112,7 +111,7 @@ class TestRenderMsx:
         tag."""
         widget = create_sticky_widget("w1", text="")
         widget = widget.model_copy(update={"text": None})
-        tree = builder.WidgetTree.build([widget])
+        tree = parser.build_tree([widget])
         result = msx.render_msx(tree, _REG)
         assert "/>" in result
         assert "</StickyNote>" not in result

@@ -12,9 +12,9 @@ import pytest
 from app.common import http_client
 from app.integration.mural import guard as guard_module
 from app.integration.mural import service as board_service
-from app.integration.mural.board import registry
-from app.integration.mural.board.renderers import msx as widget_msx
-from app.integration.mural.board.summary import renderer as summary_renderer
+from app.integration.mural.board.rendering import msx as widget_msx
+from app.integration.mural.board.rendering import registry
+from app.integration.mural.board.rendering import summary as summary_renderer
 from tests.fakes import fake_oauth_client
 
 

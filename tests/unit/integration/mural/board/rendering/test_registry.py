@@ -1,8 +1,8 @@
 import pytest
 
-from app.integration.mural.board import registry
-from app.integration.mural.board.widgets import nodes
-from app.integration.mural.board.widgets import schemas as widgets
+from app.integration.mural.board.parsing import models
+from app.integration.mural.board.parsing import schemas as widgets
+from app.integration.mural.board.rendering import registry
 
 _REG = registry.build_default_registry()
 
@@ -107,8 +107,8 @@ class TestGetTagName:
             (widgets.ArrowWidget, "Arrow"),
             (widgets.CommentWidget, "Comment"),
             (widgets.FileWidget, "File"),
-            (nodes.TableRowNode, "Row"),
-            (nodes.TableColumnNode, "Column"),
+            (models.TableRowNode, "Row"),
+            (models.TableColumnNode, "Column"),
         ],
         ids=lambda v: v if isinstance(v, str) else v.__name__,
     )
@@ -128,13 +128,13 @@ class TestGetTagName:
 class TestGetAttrs:
     def test_with_extractor(self) -> None:
         reg = registry.WidgetRendererRegistry()
-        node = nodes.TableRowNode(
+        node = models.TableRowNode(
             id="row-1",
             table_id="table-1",
             row=widgets.TableRow(rowId="row-1", height=50, minHeight=50),
         )
         reg.register(
-            nodes.TableRowNode,
+            models.TableRowNode,
             tag="Row",
             attrs=lambda n: {"row_id": n.row.row_id, "height": str(n.row.height)},
         )

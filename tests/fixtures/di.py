@@ -6,9 +6,9 @@ import dishka
 from app.integration.linking import ports as token_store
 from app.integration.mural import guard as guard_module
 from app.integration.mural import ports as approval_ports
-from app.integration.mural.board import registry as widget_registry
-from app.integration.mural.board.renderers import msx as widget_msx
-from app.integration.mural.board.summary import renderer as summary_renderer
+from app.integration.mural.board.rendering import msx as widget_msx
+from app.integration.mural.board.rendering import registry as widget_registry
+from app.integration.mural.board.rendering import summary as summary_renderer
 from tests.fakes import (
     in_memory_board_access_request_store,
     in_memory_oauth_state_store,

@@ -7,7 +7,7 @@ from app.infra.mcp import dishka_inject
 from app.integration.linking import exceptions
 from app.integration.mural import guard as guard_module
 from app.integration.mural import service as board_service_module
-from app.integration.mural.board import exceptions as board_exceptions
+from app.integration.mural.board import errors as board_exceptions
 
 
 def _mural_token_error() -> ToolError:

@@ -1,8 +1,6 @@
-from app.integration.mural.board.summary import builder as summary_builder
-from app.integration.mural.board.widgets import builder, nodes
-from app.integration.mural.board.widgets.strategies import (
-    spatial as spatial_strategy,
-)
+from app.integration.mural.board.parsing import parser
+from app.integration.mural.board.parsing import spatial as spatial_strategy
+from app.integration.mural.board.parsing import summary as summary_builder
 
 
 def _user_ref(uid: str = "u1") -> dict:
@@ -94,7 +92,7 @@ def _area(
 
 class TestBuild:
     def test_empty_board_has_no_regions(self) -> None:
-        tree = builder.WidgetTree.build([])
+        tree = parser.build_tree([])
 
         summary = summary_builder.BoardSummary.build(tree, "mural-abc")
 
@@ -102,10 +100,10 @@ class TestBuild:
         assert summary.regions == []
 
     def test_area_widget_becomes_a_region(self) -> None:
-        parsed = nodes.parse_widgets(
+        parsed = parser.parse_widgets(
             [_area("area-1", "Sprint Planning", x=10, y=20, w=300, h=200)]
         )
-        tree = builder.WidgetTree.build(parsed)
+        tree = parser.build_tree(parsed)
 
         summary = summary_builder.BoardSummary.build(tree, "mural-abc")
 
@@ -116,14 +114,14 @@ class TestBuild:
         assert (region.x, region.y, region.width, region.height) == (10, 20, 300, 200)
 
     def test_counts_descendants_of_an_area(self) -> None:
-        parsed = nodes.parse_widgets(
+        parsed = parser.parse_widgets(
             [
                 _area("area-1", "Sprint Planning"),
                 _sticky("s1", text="a", parent_id="area-1"),
                 _sticky("s2", text="b", parent_id="area-1"),
             ]
         )
-        tree = builder.WidgetTree.build(parsed)
+        tree = parser.build_tree(parsed)
 
         summary = summary_builder.BoardSummary.build(tree, "mural-abc")
 
@@ -133,15 +131,15 @@ class TestBuild:
         """Loose sticky notes at the top level (no area, no spatial
         grouping) are not regions -- only AreaWidget and SpatialGroupNode
         roots are."""
-        parsed = nodes.parse_widgets([_sticky("s1", text="loose note")])
-        tree = builder.WidgetTree.build(parsed)
+        parsed = parser.parse_widgets([_sticky("s1", text="loose note")])
+        tree = parser.build_tree(parsed)
 
         summary = summary_builder.BoardSummary.build(tree, "mural-abc")
 
         assert summary.regions == []
 
     def test_spatial_group_becomes_a_region_with_an_inferred_label(self) -> None:
-        parsed = nodes.parse_widgets(
+        parsed = parser.parse_widgets(
             [
                 _sticky("s1", text="Big Idea", font_size=80, parent_id=None),
                 _sticky("s2", text="detail", parent_id=None),
@@ -149,7 +147,7 @@ class TestBuild:
         )
         # Force both widgets into the same cluster regardless of their (0,0)
         # positions by using a generous cluster_gap.
-        tree = builder.WidgetTree.build(
+        tree = parser.build_tree(
             parsed, spatial_strategy.SpatialGroupingStrategy(cluster_gap=10_000)
         )
 
