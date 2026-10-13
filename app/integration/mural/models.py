@@ -5,7 +5,7 @@ import pydantic
 from pydantic.alias_generators import to_camel
 
 
-class AccessRequestStatus(str, enum.Enum):
+class AccessRequestStatus(enum.StrEnum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"

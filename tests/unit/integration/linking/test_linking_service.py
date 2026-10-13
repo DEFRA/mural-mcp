@@ -32,8 +32,8 @@ def _make_service(
 class TestGetAuthorizationUrl:
     async def test_issues_state_and_returns_authorization_url(self) -> None:
         oauth = _make_oauth_mock()
-        oauth.build_authorization_url.side_effect = (
-            lambda state: f"https://app.mural.co/authorize?state={state}"
+        oauth.build_authorization_url.side_effect = lambda state: (
+            f"https://app.mural.co/authorize?state={state}"
         )
         linking, _tokens, states = _make_service(oauth)
 

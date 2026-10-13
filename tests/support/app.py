@@ -21,7 +21,6 @@ stays real, wired from the real provider list.
 import collections.abc
 import contextlib
 import dataclasses
-from typing import ParamSpec, TypeVar
 
 import dishka
 import fastapi.testclient
@@ -353,16 +352,12 @@ async def mcp_client(
         yield client, overrides, user.user_id
 
 
-_P = ParamSpec("_P")
-_T = TypeVar("_T")
-
-
-def seed(
+def seed[**P, T](
     client: fastapi.testclient.TestClient,
-    coro_fn: collections.abc.Callable[_P, collections.abc.Awaitable[_T]],
-    *args: _P.args,
-    **kwargs: _P.kwargs,
-) -> _T:
+    coro_fn: collections.abc.Callable[P, collections.abc.Awaitable[T]],
+    *args: P.args,
+    **kwargs: P.kwargs,
+) -> T:
     """Run an async setup call (e.g. `overrides.states.issue(...)`) on the
     TestClient's own portal loop, never a bare `asyncio.run()`. A plain dict
     fake has no loop affinity so seeding off-loop works today by luck; it
