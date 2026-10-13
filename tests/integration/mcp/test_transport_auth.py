@@ -7,7 +7,7 @@ request instead, which is the only way to prove /mcp requires and verifies
 one.
 """
 
-import httpx
+import httpx2
 
 from app.entrypoints import http as entrypoint
 from app.identity import service as identity_service
@@ -30,17 +30,17 @@ def _build_app_and_overrides():
     return entrypoint.create_app(cfg, container=container), overrides, cfg
 
 
-async def _post_to_mcp(app, headers: dict[str, str]) -> httpx.Response:
+async def _post_to_mcp(app, headers: dict[str, str]) -> httpx2.Response:
     async with (
         app.router.lifespan_context(app),
-        httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app), base_url="http://testserver"
+        httpx2.AsyncClient(
+            transport=httpx2.ASGITransport(app=app), base_url="http://testserver"
         ) as client,
     ):
         return await client.post("/mcp/", json=_LIST_TOOLS_REQUEST, headers=headers)
 
 
-def _assert_rejected(response: httpx.Response) -> None:
+def _assert_rejected(response: httpx2.Response) -> None:
     assert response.status_code == 401
     assert response.headers["www-authenticate"].startswith(
         'Bearer error="invalid_token"'
@@ -53,7 +53,11 @@ class TestRejectsInvalidTokens:
 
         response = await _post_to_mcp(app, _MCP_HEADERS)
 
-        _assert_rejected(response)
+        # RFC 6750 §3.1: the error attribute SHOULD NOT be included when no
+        # credentials were presented at all (only an invalid/expired token
+        # gets the full `error="invalid_token"` challenge asserted below).
+        assert response.status_code == 401
+        assert response.headers["www-authenticate"] == "Bearer"
 
     async def test_a_token_that_was_never_minted(self):
         app, _overrides, _cfg = _build_app_and_overrides()

@@ -1,4 +1,4 @@
-import httpx
+import httpx2
 import pytest
 
 from app.integration.linking import exceptions
@@ -25,7 +25,7 @@ def make_service(fake_config):
 
     def _factory(
         *,
-        responses: list[httpx.Response | Exception],
+        responses: list[httpx2.Response | Exception],
         oauth_token: str | None = "valid-token",
         guard: guard_module.BoardGuard | None = None,
     ) -> tuple[board_service.BoardService, httpx_helpers.MockTransport]:
@@ -151,7 +151,7 @@ def _arrow(
 class TestFetchSummary:
     async def test_stops_paginating_when_next_token_absent(self, make_service):
         service, transport = make_service(
-            responses=[httpx.Response(200, json={"value": [], "next": None})]
+            responses=[httpx2.Response(200, json={"value": [], "next": None})]
         )
         await service.fetch_summary("user-123", "mural-abc")
         assert len(transport.requests) == 1
@@ -161,8 +161,8 @@ class TestFetchSummary:
     ):
         service, transport = make_service(
             responses=[
-                httpx.Response(200, json={"value": [], "next": "opaque-token-xyz"}),
-                httpx.Response(200, json={"value": [], "next": None}),
+                httpx2.Response(200, json={"value": [], "next": "opaque-token-xyz"}),
+                httpx2.Response(200, json={"value": [], "next": None}),
             ],
             oauth_token="mural-token-abc",
         )
@@ -179,14 +179,14 @@ class TestFetchSummary:
     async def test_follows_an_absolute_next_url(self, make_service):
         service, transport = make_service(
             responses=[
-                httpx.Response(
+                httpx2.Response(
                     200,
                     json={
                         "value": [],
                         "next": "https://api.example.com/public/v1/murals/mural-abc/widgets?page=2",
                     },
                 ),
-                httpx.Response(200, json={"value": [], "next": None}),
+                httpx2.Response(200, json={"value": [], "next": None}),
             ]
         )
         await service.fetch_summary("user-123", "mural-abc")
@@ -199,8 +199,8 @@ class TestFetchSummary:
     async def test_uses_an_opaque_next_token_as_a_query_param(self, make_service):
         service, transport = make_service(
             responses=[
-                httpx.Response(200, json={"value": [], "next": "opaque-token-xyz"}),
-                httpx.Response(200, json={"value": [], "next": None}),
+                httpx2.Response(200, json={"value": [], "next": "opaque-token-xyz"}),
+                httpx2.Response(200, json={"value": [], "next": None}),
             ]
         )
         await service.fetch_summary("user-123", "mural-abc")
@@ -213,10 +213,10 @@ class TestFetchSummary:
 
     async def test_wraps_a_mural_http_error(self, make_service):
         """A non-2xx from the Mural API must be wrapped in MuralApiError,
-        not leak the raw httpx.HTTPStatusError (which would expose vendor
+        not leak the raw httpx2.HTTPStatusError (which would expose vendor
         URLs/response bodies to REST clients and LLM tool callers).
         """
-        service, _ = make_service(responses=[httpx.Response(500)])
+        service, _ = make_service(responses=[httpx2.Response(500)])
         with pytest.raises(exceptions.MuralApiError) as exc_info:
             await service.fetch_summary("user-123", "mural-abc")
         assert exc_info.value.status_code == 500
@@ -229,7 +229,7 @@ class TestFetchSummary:
     async def test_wraps_an_unreachable_mural(self, make_service):
         """A connection failure (Mural down, DNS failure, timeout) must be
         wrapped in MuralUnavailableError, not left as a raw httpx error."""
-        service, _ = make_service(responses=[httpx.ConnectError("Connection refused")])
+        service, _ = make_service(responses=[httpx2.ConnectError("Connection refused")])
         with pytest.raises(exceptions.MuralUnavailableError):
             await service.fetch_summary("user-123", "mural-abc")
 
@@ -237,7 +237,7 @@ class TestFetchSummary:
         area = _area("a1", "Sprint Review", x=10, y=20, w=600, h=400)
         note = _sticky("sn1", text="Note 1", parent_id="a1")
         service, _ = make_service(
-            responses=[httpx.Response(200, json={"value": [area, note]})]
+            responses=[httpx2.Response(200, json={"value": [area, note]})]
         )
         result = await service.fetch_summary("user-123", "mural-abc")
         assert '<Region id="a1"' in result
@@ -249,13 +249,13 @@ class TestFetchSummary:
     async def test_omits_lone_root_widgets(self, make_service):
         note = _sticky("sn1", text="Lone note")
         service, _ = make_service(
-            responses=[httpx.Response(200, json={"value": [note]})]
+            responses=[httpx2.Response(200, json={"value": [note]})]
         )
         result = await service.fetch_summary("user-123", "mural-abc")
         assert "<Region" not in result
 
     async def test_empty_board(self, make_service):
-        service, _ = make_service(responses=[httpx.Response(200, json={"value": []})])
+        service, _ = make_service(responses=[httpx2.Response(200, json={"value": []})])
         result = await service.fetch_summary("user-123", "mural-abc")
         assert "BoardSummary" in result
         assert "<Region" not in result
@@ -294,7 +294,7 @@ class TestFetchRegion:
             await service.fetch_region("user-123", "mural-abc", "a1")
 
     async def test_unknown_id_raises(self, make_service):
-        service, _ = make_service(responses=[httpx.Response(200, json={"value": []})])
+        service, _ = make_service(responses=[httpx2.Response(200, json={"value": []})])
         with pytest.raises(
             board_exceptions.BoardRegionNotFoundError, match="no-such-id"
         ):
@@ -304,7 +304,7 @@ class TestFetchRegion:
         area = _area("a1", "Design Sprint")
         note = _sticky("sn1", text="Hello", parent_id="a1")
         service, _ = make_service(
-            responses=[httpx.Response(200, json={"value": [area, note]})]
+            responses=[httpx2.Response(200, json={"value": [area, note]})]
         )
         result = await service.fetch_region("user-123", "mural-abc", "a1")
         assert "<Area" in result
@@ -321,7 +321,7 @@ class TestFetchConnections:
     async def test_no_arrows_returns_empty_tag(self, make_service):
         note = _sticky("sn1")
         service, _ = make_service(
-            responses=[httpx.Response(200, json={"value": [note]})]
+            responses=[httpx2.Response(200, json={"value": [note]})]
         )
         result = await service.fetch_connections("user-123", "mural-abc", "sn1")
         assert result == '<Connections widget_id="sn1"/>'
@@ -331,7 +331,7 @@ class TestFetchConnections:
         dst = _sticky("dst")
         arrow = _arrow("arr1", start_ref="src", end_ref="dst")
         service, _ = make_service(
-            responses=[httpx.Response(200, json={"value": [src, dst, arrow]})]
+            responses=[httpx2.Response(200, json={"value": [src, dst, arrow]})]
         )
         result = await service.fetch_connections("user-123", "mural-abc", "src")
         assert 'direction="outgoing"' in result
@@ -343,7 +343,7 @@ class TestFetchConnections:
         dst = _sticky("dst")
         arrow = _arrow("arr1", start_ref="src", end_ref="dst")
         service, _ = make_service(
-            responses=[httpx.Response(200, json={"value": [src, dst, arrow]})]
+            responses=[httpx2.Response(200, json={"value": [src, dst, arrow]})]
         )
         result = await service.fetch_connections("user-123", "mural-abc", "dst")
         assert 'direction="incoming"' in result
@@ -360,7 +360,7 @@ class TestSearchWidgets:
         note1 = _sticky("sn1", text="Hello World")
         note2 = _sticky("sn2", text="Something else")
         service, _ = make_service(
-            responses=[httpx.Response(200, json={"value": [note1, note2]})]
+            responses=[httpx2.Response(200, json={"value": [note1, note2]})]
         )
         result = await service.search_widgets("user-123", "mural-abc", "hello", None)
         assert "sn1" in result
@@ -370,7 +370,7 @@ class TestSearchWidgets:
         note = _sticky("sn1", text="A sticky")
         area = _area("a1", "An area")
         service, _ = make_service(
-            responses=[httpx.Response(200, json={"value": [note, area]})]
+            responses=[httpx2.Response(200, json={"value": [note, area]})]
         )
         result = await service.search_widgets("user-123", "mural-abc", None, "area")
         assert "a1" in result
@@ -379,7 +379,7 @@ class TestSearchWidgets:
     async def test_no_match_returns_message(self, make_service):
         note = _sticky("sn1", text="Nothing relevant")
         service, _ = make_service(
-            responses=[httpx.Response(200, json={"value": [note]})]
+            responses=[httpx2.Response(200, json={"value": [note]})]
         )
         result = await service.search_widgets(
             "user-123", "mural-abc", "xyz-not-found", None

@@ -1,12 +1,12 @@
-import httpx
+import httpx2
 
 
-class MockTransport(httpx.AsyncBaseTransport):
-    def __init__(self, responses: list[httpx.Response | Exception]) -> None:
+class MockTransport(httpx2.AsyncBaseTransport):
+    def __init__(self, responses: list[httpx2.Response | Exception]) -> None:
         self._queue = list(responses)
-        self.requests: list[httpx.Request] = []
+        self.requests: list[httpx2.Request] = []
 
-    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+    async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
         self.requests.append(request)
         if not self._queue:
             msg = "MockTransport: no more responses queued"
@@ -18,8 +18,8 @@ class MockTransport(httpx.AsyncBaseTransport):
 
 
 def make_mock_client(
-    responses: list[httpx.Response | Exception],
-) -> tuple[httpx.AsyncClient, MockTransport]:
+    responses: list[httpx2.Response | Exception],
+) -> tuple[httpx2.AsyncClient, MockTransport]:
     transport = MockTransport(responses)
-    client = httpx.AsyncClient(transport=transport)
+    client = httpx2.AsyncClient(transport=transport)
     return client, transport

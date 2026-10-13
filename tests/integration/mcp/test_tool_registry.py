@@ -46,7 +46,7 @@ class TestToolSchema:
         async with mcp_registry_client() as client:
             tools = {t.name: t for t in await client.list_tools()}
 
-            properties = set(tools[tool_name].inputSchema.get("properties") or {})
+            properties = set(tools[tool_name].input_schema.get("properties") or {})
 
             assert properties == _EXPECTED_SCHEMAS[tool_name]
 
@@ -55,7 +55,7 @@ class TestToolSchema:
         async with mcp_registry_client() as client:
             tools = {t.name: t for t in await client.list_tools()}
 
-            required = set(tools[tool_name].inputSchema.get("required") or [])
+            required = set(tools[tool_name].input_schema.get("required") or [])
 
             assert required == _EXPECTED_REQUIRED[tool_name]
 

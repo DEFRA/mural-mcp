@@ -12,8 +12,7 @@ dependencies = [
     "dnspython==2.8.0",
     "ecs-logging==2.3.0",
     "fastapi==0.142.2",
-    "fastmcp==3.4.2",
-    "httpx==0.28.1",
+    "fastmcp==4.0.5",
     "idna==3.20",
     "joserfc==1.7.5",
     "truststore==0.10.4",
@@ -23,6 +22,7 @@ dependencies = [
     "python-multipart==0.0.32",
     "urllib3==2.8.0",
     "uvicorn==0.54.0",
+    "httpx2==2.13.1",
 ]
 
 [dependency-groups]
@@ -34,7 +34,7 @@ dev = [
     "pytest-mock==3.16.0",
     "ruff==0.16.10",
     "taskipy==1.14.1",
-    "testcontainers>=4.15.0",
+    "testcontainers==4.15.0",
     "vcrpy==8.3.0",
 ]
 
