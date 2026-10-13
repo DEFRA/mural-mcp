@@ -138,3 +138,41 @@ def arrow(
     if end_ref:
         widget["endRefId"] = end_ref
     return widget
+
+
+def image(
+    widget_id: str,
+    *,
+    url: str | None = "https://assets.example.com/img.png?sig=x",
+    **overrides: Any,
+) -> dict[str, Any]:
+    """NOT verified against a cassette; shape follows the Mural API reference
+    for the widgets endpoint and parsing.schemas.ImageWidget."""
+    fields: dict[str, Any] = {
+        "border": False,
+        "caption": "",
+        "description": "",
+        "expiresInMinutes": 15 if url else None,
+        "naturalHeight": 200.0,
+        "naturalWidth": 400.0,
+        "showCaption": False,
+        "thumbnailUrl": "https://assets.example.com/thumb.png?sig=x",
+        "url": url,
+    }
+    return base_widget(widget_id, "image", **{**fields, **overrides})
+
+
+def file_widget(widget_id: str, **overrides: Any) -> dict[str, Any]:
+    """NOT verified against a cassette; see `image`."""
+    fields: dict[str, Any] = {
+        "title": "spec.pdf",
+        "url": "https://assets.example.com/spec.pdf?sig=x",
+        "scanning": False,
+    }
+    return base_widget(widget_id, "file", **{**fields, **overrides})
+
+
+def comment(widget_id: str, message: str, **overrides: Any) -> dict[str, Any]:
+    """NOT verified against a cassette; see `image`."""
+    fields: dict[str, Any] = {"title": "", "message": message, "replies": []}
+    return base_widget(widget_id, "comment", **{**fields, **overrides})

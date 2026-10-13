@@ -63,6 +63,31 @@ def _rich_text(node: widgets.StickyNoteWidget | widgets.ShapeWidget) -> str | No
     return from_html or node.text or None
 
 
+def _author_name(user: widgets.UserRef | None) -> str:
+    if user is None:
+        return "unknown"
+    name = " ".join(p for p in (user.first_name, user.last_name) if p)
+    return name or user.alias or "unknown"
+
+
+def _comment_content(node: widgets.CommentWidget) -> str | None:
+    lines = [node.message] if node.message else []
+    lines += [
+        f"↳ {_author_name(r.user)}: {r.message}" for r in node.replies if r.message
+    ]
+    return "\n".join(lines) or None
+
+
+def _arrow_content(node: widgets.ArrowWidget) -> str | None:
+    if node.label is None:
+        return None
+    return " / ".join(item.text for item in node.label.labels if item.text) or None
+
+
+def _link_attrs(node: widgets.StickyNoteWidget | widgets.TextWidget) -> dict[str, str]:
+    return {"href": node.hyperlink} if node.hyperlink else {}
+
+
 def build_default_registry() -> WidgetRendererRegistry:
     reg = WidgetRendererRegistry()
 
@@ -123,6 +148,7 @@ def build_default_registry() -> WidgetRendererRegistry:
             "text_align": n.style.text_align,
             "role": _font_size_to_role(n.style.font_size),
             **({"tags": ",".join(n.tags)} if n.tags else {}),
+            **_link_attrs(n),
             **({"rotation": str(n.rotation)} if n.rotation else {}),
         },
         content=_rich_text,
@@ -163,6 +189,7 @@ def build_default_registry() -> WidgetRendererRegistry:
                 else {}
             ),
             **({"rotation": str(n.rotation)} if n.rotation else {}),
+            **_link_attrs(n),
         },
         content=lambda n: n.text or None,
     )
@@ -198,7 +225,14 @@ def build_default_registry() -> WidgetRendererRegistry:
         tag="Image",
         attrs=lambda n: {
             "id": n.id,
-            **({"url": n.url} if n.url else {}),
+            **({"title": n.title} if n.title else {}),
+            **({"alt": n.description} if n.description else {}),
+            "w": str(n.natural_width),
+            "h": str(n.natural_height),
+            **({"cropped": "true"} if n.mask else {}),
+            **({"link": n.link} if n.link else {}),
+            # url is null when the board restricts downloads
+            **({"viewable": "true"} if n.url else {"restricted": "true"}),
             **({"rotation": str(n.rotation)} if n.rotation else {}),
         },
         content=lambda n: n.caption or None,
@@ -234,6 +268,7 @@ def build_default_registry() -> WidgetRendererRegistry:
             **({"start_ref_id": n.start_ref_id} if n.start_ref_id else {}),
             **({"end_ref_id": n.end_ref_id} if n.end_ref_id else {}),
         },
+        content=_arrow_content,
     )
 
     reg.register(
@@ -241,9 +276,11 @@ def build_default_registry() -> WidgetRendererRegistry:
         tag="Comment",
         attrs=lambda n: {
             "id": n.id,
-            **({"replies": str(len(n.replies))} if n.replies else {}),
+            "author": _author_name(n.created_by),
+            **({"on": n.reference_widget_id} if n.reference_widget_id else {}),
+            **({"resolved": "true"} if n.resolved_by else {}),
         },
-        content=lambda n: n.message or None,
+        content=_comment_content,
     )
 
     reg.register(
@@ -252,7 +289,8 @@ def build_default_registry() -> WidgetRendererRegistry:
         attrs=lambda n: {
             "id": n.id,
             "title": n.title,
-            **({"url": n.url} if n.url else {}),
+            **({"has_preview": "true"} if n.preview_url else {}),
+            **({"link": n.link} if n.link else {}),
             **({"rotation": str(n.rotation)} if n.rotation else {}),
         },
     )
