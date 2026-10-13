@@ -12,7 +12,7 @@ in the graph asks for them once every Mongo-backed store is overridden, so
 InfrastructureProvider (whose only other export is a CA-cert dict nothing
 else needs) is left out entirely rather than included and drained.
 
-Everything else -- IdentityService, PersonalTokenService,
+Everything else -- PersonalTokenService,
 PersonalTokenVerifier, UserResolver, OAuthClient, LinkingService,
 BoardService, BoardAccessRequestService, BoardGuard and every renderer --
 stays real, wired from the real provider list.
@@ -64,7 +64,6 @@ class TestOverrides(dishka.Provider):
         tokens: linking_ports.TokenStore,
         states: linking_ports.OAuthStateStore,
         access_requests: mural_ports.BoardAccessRequestStore,
-        users: identity_ports.UserStore,
         pats: identity_ports.PersonalAccessTokenStore,
         transport: httpx_helpers.MockTransport,
     ) -> None:
@@ -73,7 +72,6 @@ class TestOverrides(dishka.Provider):
         self._tokens = tokens
         self._states = states
         self._access_requests = access_requests
-        self._users = users
         self._pats = pats
         self._transport = transport
 
@@ -94,10 +92,6 @@ class TestOverrides(dishka.Provider):
         return self._access_requests
 
     @dishka.provide(override=True)
-    def provide_user_store(self) -> identity_ports.UserStore:
-        return self._users
-
-    @dishka.provide(override=True)
     def provide_pat_store(self) -> identity_ports.PersonalAccessTokenStore:
         return self._pats
 
@@ -115,7 +109,6 @@ class Overrides:
     tokens: linking_ports.TokenStore
     states: linking_ports.OAuthStateStore
     access_requests: mural_ports.BoardAccessRequestStore
-    users: identity_ports.UserStore
     pats: identity_ports.PersonalAccessTokenStore
     transport: httpx_helpers.MockTransport
 
@@ -131,6 +124,7 @@ def real_config(**field_overrides: object) -> app_config.AppConfig:
     )
     defaults: dict[str, object] = {
         "base_url": "http://example.com",
+        "allowed_board_ids": ["*"],
         "mural_config": mural_cfg,
     }
     defaults.update(field_overrides)
@@ -144,7 +138,6 @@ def _build_container(
     tokens: linking_ports.TokenStore | None,
     states: linking_ports.OAuthStateStore | None,
     access_requests: mural_ports.BoardAccessRequestStore | None,
-    users: identity_ports.UserStore | None,
     pats: identity_ports.PersonalAccessTokenStore | None,
 ) -> tuple[dishka.AsyncContainer, Overrides]:
     transport = httpx_helpers.MockTransport(responses)
@@ -156,7 +149,6 @@ def _build_container(
             access_requests
             or in_memory_board_access_request_store.InMemoryBoardAccessRequestStore()
         ),
-        users=users or in_memory_identity_store.InMemoryUserStore(),
         pats=pats or in_memory_identity_store.InMemoryPersonalAccessTokenStore(),
         transport=transport,
     )
@@ -177,7 +169,6 @@ def _build_container(
             tokens=overrides.tokens,
             states=overrides.states,
             access_requests=overrides.access_requests,
-            users=overrides.users,
             pats=overrides.pats,
             transport=transport,
         ),
@@ -193,7 +184,6 @@ def rest_client(
     tokens: linking_ports.TokenStore | None = None,
     states: linking_ports.OAuthStateStore | None = None,
     access_requests: mural_ports.BoardAccessRequestStore | None = None,
-    users: identity_ports.UserStore | None = None,
     pats: identity_ports.PersonalAccessTokenStore | None = None,
     principal: object | None = None,
     **cfg_overrides: object,
@@ -213,7 +203,6 @@ def rest_client(
         tokens=tokens,
         states=states,
         access_requests=access_requests,
-        users=users,
         pats=pats,
     )
 
@@ -242,7 +231,6 @@ async def mcp_registry_client(
         tokens=None,
         states=None,
         access_requests=None,
-        users=None,
         pats=None,
     )
     async with container:
@@ -283,7 +271,6 @@ async def mcp_client(
     tokens: linking_ports.TokenStore | None = None,
     states: linking_ports.OAuthStateStore | None = None,
     access_requests: mural_ports.BoardAccessRequestStore | None = None,
-    users: identity_ports.UserStore | None = None,
     pats: identity_ports.PersonalAccessTokenStore | None = None,
     mural_token: str | None = None,
     external_id: str = "mcp-test-user@example.com",
@@ -315,29 +302,20 @@ async def mcp_client(
         tokens=tokens,
         states=states,
         access_requests=access_requests,
-        users=users,
         pats=pats,
     )
 
-    identity_svc = identity_service.IdentityService(overrides.users)
-    user = await identity_svc.resolve_or_create(external_id, email=external_id)
+    user_id = external_id.strip().lower()
     if mural_token is not None:
         await overrides.tokens.store_tokens(
-            user.user_id,
+            user_id,
             linking_models.MuralToken(
                 access_token=mural_token, refresh_token="test-refresh-token"
             ),
         )
 
-    ic = resolved_cfg.identity_config
-    token_svc = identity_service.PersonalTokenService(
-        overrides.pats,
-        token_prefix=ic.token_prefix,
-        default_ttl_days=ic.default_ttl_days,
-        max_ttl_days=ic.max_ttl_days,
-        last_used_throttle_seconds=ic.last_used_throttle_seconds,
-    )
-    _, secret = await token_svc.mint(user.user_id, "mcp test client")
+    token_svc = identity_service.PersonalTokenService(overrides.pats)
+    _, secret = await token_svc.mint(user_id, "mcp test client")
 
     app = entrypoint.create_app(resolved_cfg, container=container)
     mcp_transport = fastmcp_transports.StreamableHttpTransport(
@@ -350,7 +328,7 @@ async def mcp_client(
         app.router.lifespan_context(app),
         fastmcp.Client(mcp_transport) as client,
     ):
-        yield client, overrides, user.user_id
+        yield client, overrides, user_id
 
 
 _P = ParamSpec("_P")

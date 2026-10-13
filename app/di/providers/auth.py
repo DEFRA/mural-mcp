@@ -15,15 +15,13 @@ class AuthProvider(dishka.Provider):
     def provide_token_verifier(
         self,
         tokens: identity_service.PersonalTokenService,
-        users: identity_service.IdentityService,
     ) -> verifier_port.TokenVerifier:
-        return personal_token.PersonalTokenVerifier(tokens, users)
+        return personal_token.PersonalTokenVerifier(tokens)
 
     @dishka.provide(scope=dishka.Scope.APP)
     def provide_user_resolver(
         self,
         identity_config: app_config.IdentityConfig,
-        identity: identity_service.IdentityService,
         token_verifier: verifier_port.TokenVerifier,
     ) -> resolver_module.UserResolver:
         """Choose how the REST surface authenticates, per REST_AUTH_MODE:
@@ -39,7 +37,7 @@ class AuthProvider(dishka.Provider):
         if identity_config.rest_auth_mode == "token":
             return resolver_module.PersonalTokenUserResolver(token_verifier)
         return resolver_module.TrustedHeaderUserResolver(
-            identity_config.trusted_user_header, identity
+            identity_config.trusted_user_header
         )
 
     @dishka.provide(scope=dishka.Scope.REQUEST)

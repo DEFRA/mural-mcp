@@ -4,17 +4,6 @@ import datetime
 from app.identity import models
 
 
-class UserStore(abc.ABC):
-    @abc.abstractmethod
-    async def get_by_external_id(self, external_id: str) -> models.User | None: ...
-
-    @abc.abstractmethod
-    async def get_by_user_id(self, user_id: str) -> models.User | None: ...
-
-    @abc.abstractmethod
-    async def create(self, user: models.User) -> None: ...
-
-
 class PersonalAccessTokenStore(abc.ABC):
     @abc.abstractmethod
     async def create(self, token: models.PersonalAccessToken) -> None: ...

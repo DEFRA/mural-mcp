@@ -5,28 +5,6 @@ from pymongo.asynchronous import collection
 from app.identity import models, ports
 
 
-class MongoUserStore(ports.UserStore):
-    def __init__(self, users: collection.AsyncCollection) -> None:  # type: ignore[type-arg]
-        self._collection = users
-
-    async def get_by_external_id(self, external_id: str) -> models.User | None:
-        doc = await self._collection.find_one({"external_id": external_id}, {"_id": 0})
-        if doc is None:
-            return None
-        return models.User.model_validate(doc)
-
-    async def get_by_user_id(self, user_id: str) -> models.User | None:
-        doc = await self._collection.find_one({"user_id": user_id}, {"_id": 0})
-        if doc is None:
-            return None
-        return models.User.model_validate(doc)
-
-    async def create(self, user: models.User) -> None:
-        await self._collection.replace_one(
-            {"user_id": user.user_id}, user.model_dump(), upsert=True
-        )
-
-
 class MongoPersonalAccessTokenStore(ports.PersonalAccessTokenStore):
     def __init__(self, tokens: collection.AsyncCollection) -> None:  # type: ignore[type-arg]
         self._collection = tokens

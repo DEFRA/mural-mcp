@@ -9,21 +9,10 @@ from app.identity import mongo_store as identity_mongo_store
 _NOW = datetime.datetime(2024, 1, 1, tzinfo=datetime.UTC)
 
 
-def _user(**overrides: object) -> models.User:
-    defaults: dict[str, object] = {
-        "user_id": "usr_abc",
-        "external_id": "entra-oid-123",
-        "email": "a@example.com",
-        "created_at": _NOW,
-    }
-    defaults.update(overrides)
-    return models.User(**defaults)  # type: ignore[arg-type]
-
-
 def _pat(**overrides: object) -> models.PersonalAccessToken:
     defaults: dict[str, object] = {
         "id": "pat_abc",
-        "user_id": "usr_abc",
+        "user_id": "a@example.com",
         "token_hash": "deadbeef",
         "prefix": "mmcp_abcd1234",
         "label": "Claude Code",
@@ -32,38 +21,6 @@ def _pat(**overrides: object) -> models.PersonalAccessToken:
     }
     defaults.update(overrides)
     return models.PersonalAccessToken(**defaults)  # type: ignore[arg-type]
-
-
-class TestMongoUserStore:
-    async def test_create_replacement_is_valid_for_real_pymongo(self) -> None:
-        mock_col = unittest.mock.AsyncMock()
-        store = identity_mongo_store.MongoUserStore(mock_col)
-
-        await store.create(_user())
-
-        replacement = mock_col.replace_one.await_args[0][1]
-        pymongo_common.validate_ok_for_replace(replacement)
-        assert mock_col.replace_one.await_args[1]["upsert"] is True
-
-    async def test_get_by_external_id_found(self) -> None:
-        mock_col = unittest.mock.AsyncMock()
-        mock_col.find_one.return_value = _user().model_dump()
-        store = identity_mongo_store.MongoUserStore(mock_col)
-
-        result = await store.get_by_external_id("entra-oid-123")
-
-        assert result is not None
-        assert result.user_id == "usr_abc"
-        mock_col.find_one.assert_awaited_once_with(
-            {"external_id": "entra-oid-123"}, {"_id": 0}
-        )
-
-    async def test_get_by_external_id_not_found(self) -> None:
-        mock_col = unittest.mock.AsyncMock()
-        mock_col.find_one.return_value = None
-        store = identity_mongo_store.MongoUserStore(mock_col)
-
-        assert await store.get_by_external_id("unknown") is None
 
 
 class TestMongoPersonalAccessTokenStore:

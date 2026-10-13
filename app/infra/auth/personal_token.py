@@ -11,13 +11,8 @@ from app.identity import service as identity_service
 
 
 class PersonalTokenVerifier:
-    def __init__(
-        self,
-        tokens: identity_service.PersonalTokenService,
-        users: identity_service.IdentityService,
-    ) -> None:
+    def __init__(self, tokens: identity_service.PersonalTokenService) -> None:
         self._tokens = tokens
-        self._users = users
 
     async def verify(self, token: str) -> verifier.VerifiedToken | None:
         try:
@@ -29,14 +24,10 @@ class PersonalTokenVerifier:
         ):
             return None
 
-        user = await self._users.get_by_user_id(record.user_id)
-        if user is None:
-            return None
-
         return verifier.VerifiedToken(
             claims={
-                "sub": user.user_id,
-                "email": user.email,
+                "sub": record.user_id,
+                "email": record.user_id,
                 "label": record.label,
                 "token_id": record.id,
             }

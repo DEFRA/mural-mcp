@@ -8,37 +8,10 @@ from app.identity import exceptions, models, ports
 _TOKEN_ENTROPY_BYTES = 32
 _PREFIX_DISPLAY_LENGTH = 8
 
-
-class IdentityService:
-    """Resolves a portal-asserted external identity to this server's own
-    opaque user_id, creating a User record the first time a given
-    external_id is seen. This is the one place a portal-asserted identity
-    becomes a user_id — mural-mcp mints its own tokens, so unlike an
-    IdP-claims-mapping seam, this runs once at resolve time rather than on
-    every request.
-    """
-
-    def __init__(self, users: ports.UserStore) -> None:
-        self._users = users
-
-    async def resolve_or_create(
-        self, external_id: str, email: str | None = None
-    ) -> models.User:
-        existing = await self._users.get_by_external_id(external_id)
-        if existing is not None:
-            return existing
-
-        user = models.User(
-            user_id=f"usr_{uuid.uuid4().hex}",
-            external_id=external_id,
-            email=email,
-            created_at=datetime.datetime.now(datetime.UTC),
-        )
-        await self._users.create(user)
-        return user
-
-    async def get_by_user_id(self, user_id: str) -> models.User | None:
-        return await self._users.get_by_user_id(user_id)
+TOKEN_PREFIX = "mmcp_"  # noqa: S105
+DEFAULT_TTL_DAYS = 90
+MAX_TTL_DAYS = 365
+LAST_USED_THROTTLE_SECONDS = 300
 
 
 class PersonalTokenService:
@@ -56,10 +29,10 @@ class PersonalTokenService:
         self,
         tokens: ports.PersonalAccessTokenStore,
         *,
-        token_prefix: str,
-        default_ttl_days: int,
-        max_ttl_days: int,
-        last_used_throttle_seconds: int,
+        token_prefix: str = TOKEN_PREFIX,
+        default_ttl_days: int = DEFAULT_TTL_DAYS,
+        max_ttl_days: int = MAX_TTL_DAYS,
+        last_used_throttle_seconds: int = LAST_USED_THROTTLE_SECONDS,
     ) -> None:
         self._tokens = tokens
         self._token_prefix = token_prefix

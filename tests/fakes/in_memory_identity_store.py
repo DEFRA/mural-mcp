@@ -3,23 +3,6 @@ import datetime
 from app.identity import models, ports
 
 
-class InMemoryUserStore(ports.UserStore):
-    def __init__(self) -> None:
-        self._by_user_id: dict[str, models.User] = {}
-
-    async def get_by_external_id(self, external_id: str) -> models.User | None:
-        for user in self._by_user_id.values():
-            if user.external_id == external_id:
-                return user
-        return None
-
-    async def get_by_user_id(self, user_id: str) -> models.User | None:
-        return self._by_user_id.get(user_id)
-
-    async def create(self, user: models.User) -> None:
-        self._by_user_id[user.user_id] = user
-
-
 class InMemoryPersonalAccessTokenStore(ports.PersonalAccessTokenStore):
     def __init__(self) -> None:
         self._by_id: dict[str, models.PersonalAccessToken] = {}
