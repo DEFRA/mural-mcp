@@ -96,6 +96,20 @@ class TestErrorEnvelopes:
         assert result.is_error
         assert "not found" in result.content[0].text.lower()
 
+    async def test_a_board_that_cannot_be_read_gives_a_plain_error(self):
+        unreadable = httpx2.Response(200, json={"value": [{"type": "sticky note"}]})
+        async with mcp_client(mural_token="mural-tok", responses=[unreadable]) as (
+            client,
+            _overrides,
+            _user_id,
+        ):
+            result = await client.call_tool(
+                "get_board_summary", {"mural_id": "mural-abc"}, raise_on_error=False
+            )
+
+        assert result.is_error
+        assert result.content[0].text == "Board could not be read."
+
     async def test_a_mural_api_failure_surfaces_the_status_code(self):
         async with mcp_client(
             mural_token="mural-tok", responses=[httpx2.Response(500)]

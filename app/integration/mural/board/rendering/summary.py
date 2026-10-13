@@ -1,11 +1,5 @@
 from app.integration.mural.board.parsing import summary as summary_builder
-from app.integration.mural.board.rendering import registry
-
-
-def _format_attrs(attrs: dict[str, str]) -> str:
-    if not attrs:
-        return ""
-    return "".join(f' {k}="{v}"' for k, v in attrs.items())
+from app.integration.mural.board.rendering import msx, registry
 
 
 class SummaryMsxRenderer:
@@ -14,12 +8,12 @@ class SummaryMsxRenderer:
 
     def render(self, summary: summary_builder.BoardSummary) -> str:
         tag = self._reg.get_tag_name(summary.root)
-        attrs = _format_attrs(self._reg.get_attrs(summary.root))
+        attrs = msx.format_attrs(self._reg.get_attrs(summary.root))
 
         region_lines: list[str] = []
         for region in summary.regions:
             r_tag = self._reg.get_tag_name(region)
-            r_attrs = _format_attrs(self._reg.get_attrs(region))
+            r_attrs = msx.format_attrs(self._reg.get_attrs(region))
             region_lines.append(f"  <{r_tag}{r_attrs}/>")
 
         inner = "\n".join(region_lines)

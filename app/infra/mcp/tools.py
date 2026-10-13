@@ -1,3 +1,5 @@
+from collections.abc import Awaitable
+
 import dishka
 import fastmcp
 from fastmcp.exceptions import ToolError
@@ -8,6 +10,7 @@ from app.integration.linking import exceptions
 from app.integration.mural import guard as guard_module
 from app.integration.mural import service as board_service_module
 from app.integration.mural.board import errors as board_exceptions
+from app.integration.mural.board.parsing import errors as parse_exceptions
 
 
 def _mural_token_error() -> ToolError:
@@ -32,6 +35,28 @@ def _region_not_found_error(
     return ToolError(str(err))
 
 
+def _board_parse_error() -> ToolError:
+    return ToolError("Board could not be read.")
+
+
+async def _call[T](work: Awaitable[T]) -> T:
+    """Await a board operation, mapping its failures to MCP tool errors."""
+    try:
+        return await work
+    except exceptions.MuralTokenError as err:
+        raise _mural_token_error() from err
+    except exceptions.MuralUnavailableError as err:
+        raise _mural_unavailable_error() from err
+    except exceptions.MuralApiError as err:
+        raise _mural_api_error(err) from err
+    except guard_module.ForbiddenBoardError as err:
+        raise _forbidden_board_error(err) from err
+    except board_exceptions.BoardRegionNotFoundError as err:
+        raise _region_not_found_error(err) from err
+    except parse_exceptions.BoardParseError as err:
+        raise _board_parse_error() from err
+
+
 @dishka_inject.inject
 async def get_board_summary(
     mural_id: str,
@@ -41,18 +66,9 @@ async def get_board_summary(
     use_spatial_grouping: bool = False,
 ) -> str:
     """Return a compact summary of the board's top-level regions with labels, widget counts, and bounds."""
-    try:
-        return await board.fetch_summary(
-            principal.user_id, mural_id, use_spatial_grouping
-        )
-    except exceptions.MuralTokenError as err:
-        raise _mural_token_error() from err
-    except exceptions.MuralUnavailableError as err:
-        raise _mural_unavailable_error() from err
-    except exceptions.MuralApiError as err:
-        raise _mural_api_error(err) from err
-    except guard_module.ForbiddenBoardError as err:
-        raise _forbidden_board_error(err) from err
+    return await _call(
+        board.fetch_summary(principal.user_id, mural_id, use_spatial_grouping)
+    )
 
 
 @dishka_inject.inject
@@ -65,20 +81,9 @@ async def get_region(
     use_spatial_grouping: bool = False,
 ) -> str:
     """Return full MSX for all widgets within a board region (area or spatial group)."""
-    try:
-        return await board.fetch_region(
-            principal.user_id, mural_id, region_id, use_spatial_grouping
-        )
-    except exceptions.MuralTokenError as err:
-        raise _mural_token_error() from err
-    except exceptions.MuralUnavailableError as err:
-        raise _mural_unavailable_error() from err
-    except exceptions.MuralApiError as err:
-        raise _mural_api_error(err) from err
-    except guard_module.ForbiddenBoardError as err:
-        raise _forbidden_board_error(err) from err
-    except board_exceptions.BoardRegionNotFoundError as err:
-        raise _region_not_found_error(err) from err
+    return await _call(
+        board.fetch_region(principal.user_id, mural_id, region_id, use_spatial_grouping)
+    )
 
 
 @dishka_inject.inject
@@ -90,16 +95,7 @@ async def get_connections(
     principal: dishka.FromDishka[principal_module.Principal],
 ) -> str:
     """Return all arrows connected to a widget and their resolved endpoints."""
-    try:
-        return await board.fetch_connections(principal.user_id, mural_id, widget_id)
-    except exceptions.MuralTokenError as err:
-        raise _mural_token_error() from err
-    except exceptions.MuralUnavailableError as err:
-        raise _mural_unavailable_error() from err
-    except exceptions.MuralApiError as err:
-        raise _mural_api_error(err) from err
-    except guard_module.ForbiddenBoardError as err:
-        raise _forbidden_board_error(err) from err
+    return await _call(board.fetch_connections(principal.user_id, mural_id, widget_id))
 
 
 @dishka_inject.inject
@@ -118,18 +114,9 @@ async def find_widgets(
     if not query and not widget_type:
         return "Provide at least one of: query, widget_type."
 
-    try:
-        return await board.search_widgets(
-            principal.user_id, mural_id, query, widget_type
-        )
-    except exceptions.MuralTokenError as err:
-        raise _mural_token_error() from err
-    except exceptions.MuralUnavailableError as err:
-        raise _mural_unavailable_error() from err
-    except exceptions.MuralApiError as err:
-        raise _mural_api_error(err) from err
-    except guard_module.ForbiddenBoardError as err:
-        raise _forbidden_board_error(err) from err
+    return await _call(
+        board.search_widgets(principal.user_id, mural_id, query, widget_type)
+    )
 
 
 def register_tools(mcp_app: fastmcp.FastMCP) -> None:

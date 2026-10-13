@@ -1,6 +1,7 @@
 from app.integration.mural.board.parsing import parser
 from app.integration.mural.board.parsing import schemas as widgets
 from app.integration.mural.board.rendering import msx, registry
+from tests.fixtures import mural
 
 _REG = registry.build_default_registry()
 
@@ -103,8 +104,32 @@ class TestRenderMsx:
         widget = widget.model_copy(update={"html_text": "<p>rich</p>"})
         tree = parser.build_tree([widget])
         result = msx.render_msx(tree, _REG)
-        assert "<p>rich</p>" in result
+        assert "rich" in result
+        assert "<p>" not in result
         assert "plain" not in result
+
+    def test_sticky_html_text_is_reduced_to_plain_lines(self) -> None:
+        widget = create_sticky_widget("w1").model_copy(
+            update={"html_text": "<p>one <b>two</b></p><p>three &amp; four</p>"}
+        )
+        result = msx.render_msx(parser.build_tree([widget]), _REG)
+        assert "\n  one two\n  three &amp; four\n" in result
+
+    def test_text_content_is_escaped(self) -> None:
+        widget = create_sticky_widget("w1", text="1 < 2 </StickyNote>")
+        result = msx.render_msx(parser.build_tree([widget]), _REG)
+        assert "1 &lt; 2 &lt;/StickyNote&gt;" in result
+        assert result.count("</StickyNote>") == 1
+
+    def test_attribute_values_are_escaped(self) -> None:
+        raw = mural.area("a1", 'Say "hi" <now>')
+        result = msx.render_msx(parser.build_tree(parser.parse_widgets([raw])), _REG)
+        assert 'title="Say &quot;hi&quot; &lt;now&gt;"' in result
+
+    def test_unknown_widget_renders_with_its_type(self) -> None:
+        raw = mural.base_widget("d1", "drawing")
+        result = msx.render_msx(parser.build_tree(parser.parse_widgets([raw])), _REG)
+        assert result == '<Widget id="d1" type="drawing"/>'
 
     def test_sticky_no_text_is_self_closing(self) -> None:
         """Sticky note with no text and no children renders as self-closing
@@ -115,3 +140,16 @@ class TestRenderMsx:
         result = msx.render_msx(tree, _REG)
         assert "/>" in result
         assert "</StickyNote>" not in result
+
+
+class TestSummaryEscaping:
+    def test_region_labels_are_escaped(self) -> None:
+        from app.integration.mural.board.parsing import summary
+        from app.integration.mural.board.rendering import summary as summary_renderer
+
+        raw = mural.area("a1", 'Q&A "live"')
+        tree = parser.build_tree(parser.parse_widgets([raw]))
+        result = summary_renderer.SummaryMsxRenderer(_REG).render(
+            summary.BoardSummary.build(tree, "m1")
+        )
+        assert 'label="Q&amp;A &quot;live&quot;"' in result

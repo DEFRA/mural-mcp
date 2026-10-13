@@ -1,24 +1,56 @@
 """Parse a Mural board's raw widgets into a WidgetTree."""
 
+import logging
 from typing import Any
 
 import pydantic
 
 from app.integration.mural.board.parsing import errors, grouping, models, parent_id
+from app.integration.mural.board.parsing import schemas as widget_schemas
 
-_widget_adapter: pydantic.TypeAdapter[Any] = pydantic.TypeAdapter(models.AnyWidget)
+logger = logging.getLogger(__name__)
+
+_widget_adapter: pydantic.TypeAdapter[Any] = pydantic.TypeAdapter(models.KnownWidget)
+
+
+def _parse_widget(raw: dict[str, Any]) -> models.AnyWidget:
+    try:
+        widget: models.AnyWidget = _widget_adapter.validate_python(raw)
+        return widget
+    except pydantic.ValidationError as exc:
+        # Log where it failed, never what the widget said: board content is user data.
+        logger.warning(
+            "Widget %r of type %r not readable; treating as unknown (fields: %s)",
+            raw.get("id"),
+            raw.get("type"),
+            sorted({".".join(str(p) for p in e["loc"]) for e in exc.errors()}),
+        )
+
+    try:
+        return widget_schemas.UnknownWidget.model_validate(raw)
+    except pydantic.ValidationError:
+        pass
+
+    # Geometry itself is malformed: keep only the identity so the widget still
+    # shows up in the tree.
+    identity = {k: raw[k] for k in ("id", "type", "parentId") if k in raw}
+    try:
+        return widget_schemas.UnknownWidget.model_validate(identity)
+    except pydantic.ValidationError as exc:
+        msg = "A widget has no readable id or type."
+        raise errors.BoardParseError(msg) from exc
 
 
 def parse_widgets(raw_widgets: list[dict[str, Any]]) -> list[models.AnyWidget]:
     """Parse a list of raw widget dicts from the Mural API into typed widgets.
 
+    A widget that doesn't match a known schema becomes an UnknownWidget rather
+    than failing the board.
+
     Raises:
-        BoardParseError: if a widget does not match any known widget schema.
+        BoardParseError: if a widget has no usable id and type.
     """
-    try:
-        return [_widget_adapter.validate_python(raw) for raw in raw_widgets]
-    except pydantic.ValidationError as exc:
-        raise errors.BoardParseError(str(exc)) from exc
+    return [_parse_widget(raw) for raw in raw_widgets]
 
 
 def build_tree(

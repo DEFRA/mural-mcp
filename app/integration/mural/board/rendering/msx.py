@@ -1,3 +1,4 @@
+import html
 from collections.abc import Iterable
 
 from app.integration.mural.board.parsing import models
@@ -7,10 +8,10 @@ from app.integration.mural.board.rendering import registry
 _INDENT = "  "
 
 
-def _format_attrs(attrs: dict[str, str]) -> str:
+def format_attrs(attrs: dict[str, str]) -> str:
     if not attrs:
         return ""
-    return "".join(f' {k}="{v}"' for k, v in attrs.items())
+    return "".join(f' {k}="{html.escape(v, quote=True)}"' for k, v in attrs.items())
 
 
 def render_subtree(
@@ -39,7 +40,7 @@ def _render_node(
 ) -> list[str]:
     node = tree.resolve(node_id)
     tag = reg.get_tag_name(node)
-    attr_str = _format_attrs(reg.get_attrs(node))
+    attr_str = format_attrs(reg.get_attrs(node))
 
     child_ids = tree.adjacency.get(node_id, [])
     content = reg.get_content(node)
@@ -48,7 +49,10 @@ def _render_node(
     if child_ids or content:
         lines: list[str] = [f"{prefix}<{tag}{attr_str}>"]
         if content:
-            lines.append(f"{prefix}{_INDENT}{content}")
+            lines += [
+                f"{prefix}{_INDENT}{line}"
+                for line in html.escape(content, quote=False).splitlines()
+            ]
         for cid in child_ids:
             lines += _render_node(cid, tree, reg, indent + 1)
         lines.append(f"{prefix}</{tag}>")
@@ -66,10 +70,10 @@ def _connection(
     tree: models.WidgetTree,
 ) -> str:
     """One <Connection>; the other end's type is given only if it is on the board."""
-    attrs = f'arrow_id="{arrow_id}" direction="{direction}" {role}_id="{other_id}"'
+    attrs = {"arrow_id": arrow_id, "direction": direction, f"{role}_id": other_id}
     if other_id in tree.nodes:
-        attrs += f' {role}_type="{tree.nodes[other_id].type}"'
-    return f"  <Connection {attrs}/>"
+        attrs[f"{role}_type"] = tree.nodes[other_id].type
+    return f"  <Connection{format_attrs(attrs)}/>"
 
 
 class WidgetMsxRenderer:
@@ -110,7 +114,8 @@ class WidgetMsxRenderer:
                 )
 
         if not connection_lines:
-            return f'<Connections widget_id="{widget_id}"/>'
+            return f"<Connections{format_attrs({'widget_id': widget_id})}/>"
 
         inner = "\n".join(connection_lines)
-        return f'<Connections widget_id="{widget_id}">\n{inner}\n</Connections>'
+        opening = f"<Connections{format_attrs({'widget_id': widget_id})}>"
+        return f"{opening}\n{inner}\n</Connections>"

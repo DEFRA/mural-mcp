@@ -395,3 +395,33 @@ class FileWidget(Widget):
     expires_in_minutes: int | None = None
     link: str | None = None
     preview_url: str | None = None
+
+
+class UnknownWidget(Widget):
+    """Fallback for a widget the schemas can't read.
+
+    Covers widget types we don't model (the API may add some) and known types
+    whose payload doesn't match their schema. Only the fields every consumer
+    needs are kept: identity, parentage and geometry. Content is never kept.
+    """
+
+    x: float = 0.0
+    y: float = 0.0
+    width: float = 0.0
+    height: float = 0.0
+    rotation: float = 0.0
+    stacking_order: int = 0
+    presentation_index: int = -1
+    instruction: str = ""
+    hidden: bool = False
+    hide_editor: bool = False
+    hide_owner: bool = False
+    invisible: bool = False
+    locked: bool = False
+    locked_by_facilitator: bool = False
+    created_by: UserRef = pydantic.Field(default_factory=lambda: UserRef(id=""))
+    created_on: int = 0
+    updated_by: UserRef = pydantic.Field(default_factory=lambda: UserRef(id=""))
+    updated_on: int = 0
+    content_edited_by: UserRef = pydantic.Field(default_factory=lambda: UserRef(id=""))
+    content_edited_on: int = 0
