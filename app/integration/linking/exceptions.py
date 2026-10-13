@@ -15,7 +15,7 @@ class LinkMismatchError(Exception):
 class MuralApiError(Exception):
     """Raised when the Mural API returns a non-2xx response.
 
-    Wraps the underlying httpx.HTTPStatusError so callers never see raw vendor
+    Wraps the underlying httpx2.HTTPStatusError so callers never see raw vendor
     URLs, headers, or response bodies escape to a REST client or an LLM tool
     caller.
     """
@@ -30,6 +30,6 @@ class MuralUnavailableError(Exception):
     received (e.g. Mural is unreachable, DNS resolution fails, or the
     connection times out).
 
-    Wraps the underlying httpx.RequestError, distinct from MuralApiError
+    Wraps the underlying httpx2.RequestError, distinct from MuralApiError
     which means Mural *did* respond, just with a non-2xx status.
     """

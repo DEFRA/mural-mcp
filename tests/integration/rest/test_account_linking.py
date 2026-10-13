@@ -7,12 +7,12 @@ exists to protect -- until this file, nothing drove the guarded code
 itself, only the guard.
 """
 
-import httpx
+import httpx2
 
 from tests.support.app import rest_client, seed
 
 _EXTERNAL_ID = "user@example.com"
-_MURAL_TOKEN_RESPONSE = httpx.Response(
+_MURAL_TOKEN_RESPONSE = httpx2.Response(
     200,
     json={
         "access_token": "mural-access-token",
@@ -103,7 +103,7 @@ class TestTestConnection:
         """When the user is linked and Mural's /users/me call succeeds."""
         mural_responses = [
             _MURAL_TOKEN_RESPONSE,  # for the callback (storing the token)
-            httpx.Response(
+            httpx2.Response(
                 200, json={"value": {"id": "mural_u123"}}
             ),  # for test-connection
         ]
@@ -125,7 +125,7 @@ class TestTestConnection:
         """When the user is linked but Mural returns 401 (token revoked/expired)."""
         mural_responses = [
             _MURAL_TOKEN_RESPONSE,  # for the callback
-            httpx.Response(401),  # for test-connection (Mural rejects the token)
+            httpx2.Response(401),  # for test-connection (Mural rejects the token)
         ]
         with rest_client(responses=mural_responses) as (client, overrides):
             state = seed(client, overrides.states.issue, _EXTERNAL_ID)
@@ -144,7 +144,7 @@ class TestTestConnection:
         """When Mural returns a 5xx error."""
         mural_responses = [
             _MURAL_TOKEN_RESPONSE,  # for the callback
-            httpx.Response(500),  # for test-connection (Mural server error)
+            httpx2.Response(500),  # for test-connection (Mural server error)
         ]
         with rest_client(responses=mural_responses) as (client, overrides):
             state = seed(client, overrides.states.issue, _EXTERNAL_ID)
@@ -165,7 +165,7 @@ class TestTestConnection:
         (e.g. Mural is down, DNS failure, connection timeout)."""
         mural_responses = [
             _MURAL_TOKEN_RESPONSE,  # for the callback
-            httpx.ConnectError("Connection refused"),  # for test-connection
+            httpx2.ConnectError("Connection refused"),  # for test-connection
         ]
         with rest_client(responses=mural_responses) as (client, overrides):
             state = seed(client, overrides.states.issue, _EXTERNAL_ID)

@@ -26,7 +26,7 @@ import dishka
 import fastapi.testclient
 import fastmcp
 import fastmcp.client.transports as fastmcp_transports
-import httpx
+import httpx2
 import pydantic
 from dishka.integrations import fastapi as dishka_fastapi
 
@@ -95,8 +95,8 @@ class TestOverrides(dishka.Provider):
         return self._pats
 
     @dishka.provide(scope=dishka.Scope.REQUEST, override=True)
-    def provide_httpx_client(self) -> httpx.AsyncClient:
-        return httpx.AsyncClient(transport=self._transport)
+    def provide_httpx_client(self) -> httpx2.AsyncClient:
+        return httpx2.AsyncClient(transport=self._transport)
 
 
 @dataclasses.dataclass
@@ -133,7 +133,7 @@ def real_config(**field_overrides: object) -> app_config.AppConfig:
 def _build_container(
     *,
     cfg: app_config.AppConfig,
-    responses: list[httpx.Response | Exception],
+    responses: list[httpx2.Response | Exception],
     tokens: linking_ports.TokenStore | None,
     states: linking_ports.OAuthStateStore | None,
     access_requests: mural_ports.BoardAccessRequestStore | None,
@@ -179,7 +179,7 @@ def _build_container(
 def rest_client(
     *,
     cfg: app_config.AppConfig | None = None,
-    responses: list[httpx.Response | Exception] | None = None,
+    responses: list[httpx2.Response | Exception] | None = None,
     tokens: linking_ports.TokenStore | None = None,
     states: linking_ports.OAuthStateStore | None = None,
     access_requests: mural_ports.BoardAccessRequestStore | None = None,
@@ -241,17 +241,17 @@ async def mcp_registry_client(
 
 def _asgi_httpx_client_factory(
     app: fastapi.FastAPI,
-) -> collections.abc.Callable[..., httpx.AsyncClient]:
+) -> collections.abc.Callable[..., httpx2.AsyncClient]:
     def factory(
         *,
         headers: dict[str, str] | None = None,
-        auth: httpx.Auth | None = None,
+        auth: httpx2.Auth | None = None,
         follow_redirects: bool = True,
-        timeout: httpx.Timeout | None = None,
+        timeout: httpx2.Timeout | None = None,
         **_kwargs: object,
-    ) -> httpx.AsyncClient:
-        return httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app),
+    ) -> httpx2.AsyncClient:
+        return httpx2.AsyncClient(
+            transport=httpx2.ASGITransport(app=app),
             base_url="http://testserver",
             headers=headers,
             auth=auth,
@@ -266,7 +266,7 @@ def _asgi_httpx_client_factory(
 async def mcp_client(
     *,
     cfg: app_config.AppConfig | None = None,
-    responses: list[httpx.Response | Exception] | None = None,
+    responses: list[httpx2.Response | Exception] | None = None,
     tokens: linking_ports.TokenStore | None = None,
     states: linking_ports.OAuthStateStore | None = None,
     access_requests: mural_ports.BoardAccessRequestStore | None = None,
@@ -276,7 +276,7 @@ async def mcp_client(
     **cfg_overrides: object,
 ) -> collections.abc.AsyncIterator[tuple[fastmcp.Client, Overrides, str]]:
     """Drive the real MCP surface -- registration through to a tool call --
-    over ASGI (httpx.ASGITransport wrapping the real create_app), so
+    over ASGI (httpx2.ASGITransport wrapping the real create_app), so
     transport-level bearer auth is enforced for real.
 
     The in-memory FastMCPTransport (`fastmcp.Client(fastmcp_app)`) is fine

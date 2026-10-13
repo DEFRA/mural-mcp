@@ -1,6 +1,6 @@
 import datetime
 
-import httpx
+import httpx2
 import pytest
 
 from app import config as app_config
@@ -12,7 +12,7 @@ from tests.fakes import httpx_helpers, in_memory_token_store
 
 def _make_oauth(
     config: app_config.AppConfig,
-    responses: list[httpx.Response | Exception],
+    responses: list[httpx2.Response | Exception],
     tokens: in_memory_token_store.InMemoryTokenStore | None = None,
 ) -> tuple[oauth_client_module.OAuthClient, httpx_helpers.MockTransport]:
     client, transport = httpx_helpers.make_mock_client(responses)
@@ -116,7 +116,7 @@ class TestGetValidToken:
 
         client_obj, _ = _make_oauth(
             fake_config,
-            [httpx.Response(200, json=new_token_data)],
+            [httpx2.Response(200, json=new_token_data)],
             tokens=store,
         )
 
@@ -133,7 +133,7 @@ class TestGetValidToken:
 
 class TestExchangeCode:
     async def test_raises_mural_api_error_on_http_error(self, fake_config):
-        client_obj, _ = _make_oauth(fake_config, [httpx.Response(400)])
+        client_obj, _ = _make_oauth(fake_config, [httpx2.Response(400)])
 
         with pytest.raises(exceptions.MuralApiError) as exc_info:
             await client_obj.exchange_code("bad-code")
@@ -142,7 +142,7 @@ class TestExchangeCode:
 
     async def test_raises_mural_unavailable_error_when_unreachable(self, fake_config):
         client_obj, _ = _make_oauth(
-            fake_config, [httpx.ConnectError("Connection refused")]
+            fake_config, [httpx2.ConnectError("Connection refused")]
         )
 
         with pytest.raises(exceptions.MuralUnavailableError):
@@ -153,7 +153,7 @@ class TestRefresh:
     async def test_reuses_original_token_when_response_lacks_one(self, fake_config):
         client_obj, _ = _make_oauth(
             fake_config,
-            [httpx.Response(200, json={"access_token": "new-access"})],
+            [httpx2.Response(200, json={"access_token": "new-access"})],
         )
         token = await client_obj.refresh("original-refresh")
         assert token.access_token == "new-access"
@@ -163,7 +163,7 @@ class TestRefresh:
         client_obj, _ = _make_oauth(
             fake_config,
             [
-                httpx.Response(
+                httpx2.Response(
                     200,
                     json={"access_token": "new-access", "refresh_token": "new-refresh"},
                 )
@@ -173,14 +173,14 @@ class TestRefresh:
         assert token.refresh_token == "new-refresh"
 
     async def test_raises_mural_api_error_on_http_error(self, fake_config):
-        client_obj, _ = _make_oauth(fake_config, [httpx.Response(401)])
+        client_obj, _ = _make_oauth(fake_config, [httpx2.Response(401)])
         with pytest.raises(exceptions.MuralApiError) as exc_info:
             await client_obj.refresh("original-refresh")
         assert exc_info.value.status_code == 401
 
     async def test_raises_mural_unavailable_error_when_unreachable(self, fake_config):
         client_obj, _ = _make_oauth(
-            fake_config, [httpx.ConnectError("Connection refused")]
+            fake_config, [httpx2.ConnectError("Connection refused")]
         )
         with pytest.raises(exceptions.MuralUnavailableError):
             await client_obj.refresh("original-refresh")

@@ -6,7 +6,7 @@ class RequestContext:
     """Per-request metadata available inside the REQUEST scope.
 
     Constructed by the FastAPI middleware and the FastMCP `@inject` decorator;
-    consumed by REQUEST-scoped providers (e.g. the per-request httpx client)
+    consumed by REQUEST-scoped providers (e.g. the per-request httpx2 client)
     via `dishka.from_context`.
     """
 

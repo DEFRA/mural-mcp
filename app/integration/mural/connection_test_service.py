@@ -1,4 +1,4 @@
-import httpx
+import httpx2
 
 from app import config as app_config
 from app.integration.linking import exceptions, oauth_client
@@ -8,7 +8,7 @@ class MuralConnectionTestService:
     def __init__(
         self,
         config: app_config.AppConfig,
-        client: httpx.AsyncClient,
+        client: httpx2.AsyncClient,
         oauth: oauth_client.OAuthClient,
     ) -> None:
         self._config = config
@@ -36,10 +36,10 @@ class MuralConnectionTestService:
                 f"{api_base}/public/v1/users/me",
                 headers={"Authorization": f"Bearer {access_token}"},
             )
-        except httpx.RequestError as exc:
+        except httpx2.RequestError as exc:
             raise exceptions.MuralUnavailableError(str(exc)) from exc
 
         try:
             response.raise_for_status()
-        except httpx.HTTPStatusError as exc:
+        except httpx2.HTTPStatusError as exc:
             raise exceptions.MuralApiError(response.status_code) from exc

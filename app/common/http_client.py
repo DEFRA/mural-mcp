@@ -1,7 +1,7 @@
 import logging
 import ssl
 
-import httpx
+import httpx2
 import truststore
 
 from app.common import tracing
@@ -13,14 +13,14 @@ def _create_ssl_context() -> ssl.SSLContext:
     return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 
 
-async def async_hook_request_tracing(request: httpx.Request) -> None:
+async def async_hook_request_tracing(request: httpx2.Request) -> None:
     trace_id = tracing.ctx_trace_id.get(None)
     tracing_header = tracing.ctx_tracing_header.get(None)
     if trace_id and tracing_header:
         request.headers[tracing_header] = trace_id
 
 
-def hook_request_tracing(request: httpx.Request) -> None:
+def hook_request_tracing(request: httpx2.Request) -> None:
     trace_id = tracing.ctx_trace_id.get(None)
     tracing_header = tracing.ctx_tracing_header.get(None)
     if trace_id and tracing_header:
@@ -33,9 +33,9 @@ def create_async_client(
     trace_id: str | None = None,
     proxy: str | None = None,
     request_timeout: int = 30,
-) -> httpx.AsyncClient:
+) -> httpx2.AsyncClient:
     headers = {tracing_header: trace_id} if tracing_header and trace_id else None
-    return httpx.AsyncClient(
+    return httpx2.AsyncClient(
         timeout=request_timeout,
         headers=headers,
         proxy=proxy,
@@ -50,9 +50,9 @@ def create_client(
     trace_id: str | None = None,
     proxy: str | None = None,
     request_timeout: int = 30,
-) -> httpx.Client:
+) -> httpx2.Client:
     headers = {tracing_header: trace_id} if tracing_header and trace_id else None
-    return httpx.Client(
+    return httpx2.Client(
         timeout=request_timeout,
         headers=headers,
         proxy=proxy,

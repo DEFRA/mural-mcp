@@ -1,4 +1,5 @@
 import unittest.mock
+import uuid
 
 import dishka
 import fastmcp
@@ -126,6 +127,26 @@ class TestInject:
 
         with pytest.raises(RuntimeError, match="container"):
             await tool(ctx=bad_ctx)
+
+    async def test_falls_back_to_generated_trace_id_without_request_context(
+        self, container: dishka.AsyncContainer
+    ) -> None:
+        @dishka_inject.inject
+        async def tool(
+            ctx: fastmcp.Context,  # noqa: ARG001  # required by decorator contract
+            trace: dishka.FromDishka[str],
+        ) -> str:
+            return trace
+
+        ctx = unittest.mock.MagicMock(spec=fastmcp.Context)
+        ctx.lifespan_context = {"container": container}
+        type(ctx).request_id = unittest.mock.PropertyMock(
+            side_effect=RuntimeError("no request context")
+        )
+
+        result = await tool(ctx)
+
+        assert uuid.UUID(result)
 
     async def test_opens_and_closes_request_subscope(
         self, container: dishka.AsyncContainer

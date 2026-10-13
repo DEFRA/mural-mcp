@@ -1,7 +1,7 @@
 import datetime
 import urllib.parse
 
-import httpx
+import httpx2
 
 from app import config as app_config
 from app.integration.linking import exceptions, models, ports
@@ -31,7 +31,7 @@ class OAuthClient:
     def __init__(
         self,
         config: app_config.AppConfig,
-        client: httpx.AsyncClient,
+        client: httpx2.AsyncClient,
         tokens: ports.TokenStore,
     ) -> None:
         self._config = config
@@ -88,12 +88,12 @@ class OAuthClient:
                     "client_secret": mural_config.client_secret.get_secret_value(),
                 },
             )
-        except httpx.RequestError as exc:
+        except httpx2.RequestError as exc:
             raise exceptions.MuralUnavailableError(str(exc)) from exc
 
         try:
             response.raise_for_status()
-        except httpx.HTTPStatusError as exc:
+        except httpx2.HTTPStatusError as exc:
             raise exceptions.MuralApiError(response.status_code) from exc
 
         return self._to_token(response.json(), fallback_refresh_token="")
@@ -111,12 +111,12 @@ class OAuthClient:
                     "client_secret": mural_config.client_secret.get_secret_value(),
                 },
             )
-        except httpx.RequestError as exc:
+        except httpx2.RequestError as exc:
             raise exceptions.MuralUnavailableError(str(exc)) from exc
 
         try:
             response.raise_for_status()
-        except httpx.HTTPStatusError as exc:
+        except httpx2.HTTPStatusError as exc:
             raise exceptions.MuralApiError(response.status_code) from exc
 
         return self._to_token(

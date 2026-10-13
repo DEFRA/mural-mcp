@@ -1,7 +1,7 @@
 from collections.abc import AsyncIterator
 
 import dishka
-import httpx
+import httpx2
 
 from app import config as app_config
 from app.common import http_client, request_context
@@ -16,7 +16,7 @@ from app.integration.mural.board.rendering import summary as summary_renderer
 
 
 class RequestScopeProvider(dishka.Provider):
-    """REQUEST-scoped wiring: per-request httpx client plus the services that
+    """REQUEST-scoped wiring: per-request httpx2 client plus the services that
     use it (OAuthClient, BoardService). RequestContext arrives via from_context
     — populated by the FastAPI middleware (HTTP) or the dishka_inject
     decorator (MCP)."""
@@ -30,7 +30,7 @@ class RequestScopeProvider(dishka.Provider):
         self,
         config: app_config.AppConfig,
         rc: request_context.RequestContext,
-    ) -> AsyncIterator[httpx.AsyncClient]:
+    ) -> AsyncIterator[httpx2.AsyncClient]:
         proxy = str(config.http_proxy) if config.http_proxy else None
         async with http_client.create_async_client(
             tracing_header=config.tracing_header,
@@ -43,7 +43,7 @@ class RequestScopeProvider(dishka.Provider):
     def provide_oauth_client(
         self,
         config: app_config.AppConfig,
-        client: httpx.AsyncClient,
+        client: httpx2.AsyncClient,
         tokens: token_store.TokenStore,
     ) -> oauth_client.OAuthClient:
         return oauth_client.OAuthClient(config=config, client=client, tokens=tokens)
@@ -61,7 +61,7 @@ class RequestScopeProvider(dishka.Provider):
     def provide_mural_connection_test_service(
         self,
         config: app_config.AppConfig,
-        client: httpx.AsyncClient,
+        client: httpx2.AsyncClient,
         oauth: oauth_client.OAuthClient,
     ) -> connection_test_service.MuralConnectionTestService:
         return connection_test_service.MuralConnectionTestService(
@@ -74,7 +74,7 @@ class RequestScopeProvider(dishka.Provider):
     def provide_board_service(
         self,
         config: app_config.AppConfig,
-        client: httpx.AsyncClient,
+        client: httpx2.AsyncClient,
         oauth: oauth_client.OAuthClient,
         renderer: widget_msx.WidgetMsxRenderer,
         sum_renderer: summary_renderer.SummaryMsxRenderer,

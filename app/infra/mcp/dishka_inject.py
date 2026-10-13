@@ -142,6 +142,6 @@ def _extract_ctx(
 def _build_request_context(ctx: fastmcp.Context) -> request_context.RequestContext:
     try:
         trace_id = ctx.request_id
-    except (LookupError, ValueError):
+    except (LookupError, ValueError, RuntimeError):
         trace_id = str(uuid.uuid4())
     return request_context.RequestContext(trace_id=trace_id)

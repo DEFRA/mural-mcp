@@ -8,12 +8,12 @@ MCP client actually sees them: `result.is_error` and the message in
 
 import datetime
 
-import httpx
+import httpx2
 
 from app.integration.mural import models
 from tests.support.app import mcp_client
 
-_EMPTY_WIDGETS = httpx.Response(200, json={"value": []})
+_EMPTY_WIDGETS = httpx2.Response(200, json={"value": []})
 
 
 class TestHappyPaths:
@@ -98,7 +98,7 @@ class TestErrorEnvelopes:
 
     async def test_a_mural_api_failure_surfaces_the_status_code(self):
         async with mcp_client(
-            mural_token="mural-tok", responses=[httpx.Response(500)]
+            mural_token="mural-tok", responses=[httpx2.Response(500)]
         ) as (client, _overrides, _user_id):
             result = await client.call_tool(
                 "get_board_summary", {"mural_id": "mural-abc"}, raise_on_error=False
