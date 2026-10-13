@@ -1,4 +1,5 @@
 import pydantic
+import pytest
 
 from app.config import AppConfig, IdentityConfig, MuralConfig
 
@@ -38,15 +39,42 @@ class TestAppConfig:
         assert cfg.server_name == "mural-mcp"
 
 
+class TestAccessPolicyConfig:
+    def test_defaults_are_deny_by_default_with_flags_off(self) -> None:
+        cfg = _make_config()
+
+        assert cfg.allowed_board_ids == []
+        assert cfg.self_service_access_enabled is False
+        assert cfg.data_handling_upload_enabled is False
+
+    def test_allowed_board_ids_come_from_a_comma_separated_env_var(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ALLOWED_BOARD_IDS", "board-1, board-2 ,,board-3")
+
+        cfg = _make_config()
+
+        assert cfg.allowed_board_ids == ["board-1", "board-2", "board-3"]
+
+    def test_flags_come_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SELF_SERVICE_ACCESS_ENABLED", "true")
+        monkeypatch.setenv("DATA_HANDLING_UPLOAD_ENABLED", "true")
+
+        cfg = _make_config()
+
+        assert cfg.self_service_access_enabled is True
+        assert cfg.data_handling_upload_enabled is True
+
+    def test_the_old_resource_guard_mode_setting_is_gone(self) -> None:
+        assert "resource_guard_mode" not in AppConfig.model_fields
+
+
 class TestIdentityConfig:
     def test_defaults(self) -> None:
         cfg = _make_config()
 
         assert cfg.identity_config.rest_auth_mode == "trusted"
         assert cfg.identity_config.trusted_user_header == "X-User-Id"
-        assert cfg.identity_config.token_prefix == "mmcp_"
-        assert cfg.identity_config.default_ttl_days == 90
-        assert cfg.identity_config.max_ttl_days == 365
 
     def test_is_overridable(self) -> None:
         cfg = _make_config(

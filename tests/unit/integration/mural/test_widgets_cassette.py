@@ -38,7 +38,7 @@ class TestSearchWidgets:
                 oauth=fake_oauth_client.FakeOAuthClient("test-token"),
                 renderer=widget_msx.WidgetMsxRenderer(reg),
                 summary_renderer=summary_renderer.SummaryMsxRenderer(reg),
-                guard=guard_module.AllowAllBoardGuard(),
+                guard=guard_module.EnvAllowListBoardGuard(["*"]),
             )
 
             msx_output = await service.search_widgets(

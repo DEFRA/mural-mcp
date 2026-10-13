@@ -37,7 +37,7 @@ def make_service(fake_config):
             oauth=oauth,
             renderer=_RENDERER,
             summary_renderer=_SUMMARY_RENDERER,
-            guard=guard or guard_module.AllowAllBoardGuard(),
+            guard=guard or guard_module.EnvAllowListBoardGuard(["*"]),
         )
         return service, transport
 
@@ -410,7 +410,7 @@ class TestGuardEnforcement:
         a real bug).
         """
         store = in_memory_board_access_request_store.InMemoryBoardAccessRequestStore()
-        guard = guard_module.AllowListBoardGuard(store)
+        guard = guard_module.ApprovedRequestBoardGuard(store)
         service, transport = make_service(responses=[], guard=guard)
 
         with pytest.raises(guard_module.ForbiddenBoardError):

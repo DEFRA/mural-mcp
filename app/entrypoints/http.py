@@ -46,9 +46,10 @@ def create_app(
     fastapi_app.add_middleware(tracing.TraceIdMiddleware, cfg=cfg)
     fastapi_app.include_router(health_router.router)
     fastapi_app.include_router(mural_connect_router.router, prefix="/linking")
-    fastapi_app.include_router(mural_approval_router.router, prefix="/approvals")
     fastapi_app.include_router(token_router.router, prefix="/tokens")
-    fastapi_app.include_router(admin_router.router, prefix="/admin")
+    if cfg.self_service_access_enabled:
+        fastapi_app.include_router(mural_approval_router.router, prefix="/approvals")
+        fastapi_app.include_router(admin_router.router, prefix="/admin")
 
     return fastapi_app
 

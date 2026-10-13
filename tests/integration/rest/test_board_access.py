@@ -15,7 +15,7 @@ def _headers() -> dict[str, str]:
 
 class TestRequestingAccess:
     def test_creates_a_pending_request(self):
-        with rest_client() as (client, _overrides):
+        with rest_client(self_service_access_enabled=True) as (client, _overrides):
             response = client.post(
                 "/approvals/boards", json=_PAYLOAD, headers=_headers()
             )
@@ -29,7 +29,7 @@ class TestRequestingAccess:
             assert body["approved"] is False
 
     def test_conflicts_when_the_same_board_is_already_requested(self):
-        with rest_client() as (client, _overrides):
+        with rest_client(self_service_access_enabled=True) as (client, _overrides):
             client.post("/approvals/boards", json=_PAYLOAD, headers=_headers())
 
             response = client.post(
@@ -39,7 +39,7 @@ class TestRequestingAccess:
             assert response.status_code == 409
 
     def test_is_rejected_without_a_trusted_header(self):
-        with rest_client() as (client, _overrides):
+        with rest_client(self_service_access_enabled=True) as (client, _overrides):
             response = client.post("/approvals/boards", json=_PAYLOAD)
 
             assert response.status_code == 400
@@ -47,7 +47,7 @@ class TestRequestingAccess:
 
 class TestGettingARequest:
     def test_returns_a_requested_board(self):
-        with rest_client() as (client, _overrides):
+        with rest_client(self_service_access_enabled=True) as (client, _overrides):
             client.post("/approvals/boards", json=_PAYLOAD, headers=_headers())
 
             response = client.get("/approvals/boards/board-abc", headers=_headers())
@@ -56,16 +56,16 @@ class TestGettingARequest:
             assert response.json()["boardId"] == "board-abc"
 
     def test_is_not_found_when_never_requested(self):
-        with rest_client() as (client, _overrides):
+        with rest_client(self_service_access_enabled=True) as (client, _overrides):
             response = client.get("/approvals/boards/nonexistent", headers=_headers())
 
             assert response.status_code == 404
 
     def test_is_scoped_to_the_requesting_user(self):
-        with rest_client() as (client, overrides):
+        with rest_client(self_service_access_enabled=True) as (client, overrides):
             other_users_request = models.BoardAccessRequest(
                 id="req-other",
-                user_id="usr_other",
+                user_id="other@example.com",
                 board_id="board-abc",
                 reason="need it",
                 iao="owner@defra.gov.uk",
