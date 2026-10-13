@@ -6,8 +6,11 @@ MCP client actually sees them: `result.is_error` and the message in
 `result.content[0].text`, not just an exception type on a direct call.
 """
 
+import datetime
+
 import httpx
 
+from app.integration.mural import models
 from tests.support.app import mcp_client
 
 _EMPTY_WIDGETS = httpx.Response(200, json={"value": []})
@@ -105,14 +108,38 @@ class TestErrorEnvelopes:
         assert "500" in result.content[0].text
 
     async def test_a_board_the_reviewer_has_not_approved_is_forbidden(self):
-        """AllowListBoardGuard denies when there is no approved request for
-        this user and board -- an empty access-requests store already
-        proves that, with no need for a bespoke always-deny fake."""
+        """The env allow list denies a board it does not name -- and with
+        self-service access off there is no request store to fall back on."""
         async with mcp_client(
-            mural_token="mural-tok", responses=[], resource_guard_mode="allow_list"
+            mural_token="mural-tok", responses=[], allowed_board_ids=["other-board"]
         ) as (client, _overrides, _user_id):
             result = await client.call_tool(
                 "get_board_summary", {"mural_id": "mural-abc"}, raise_on_error=False
             )
 
         assert result.is_error
+
+    async def test_an_approved_request_grants_a_board_when_self_service_is_on(self):
+        async with mcp_client(
+            mural_token="mural-tok",
+            responses=[_EMPTY_WIDGETS],
+            allowed_board_ids=["other-board"],
+            self_service_access_enabled=True,
+        ) as (client, overrides, user_id):
+            await overrides.access_requests.create(
+                models.BoardAccessRequest(
+                    id="req-1",
+                    user_id=user_id,
+                    board_id="mural-abc",
+                    reason="why",
+                    iao="owner@x.com",
+                    status=models.AccessRequestStatus.APPROVED,
+                    created_at=datetime.datetime.now(datetime.UTC),
+                )
+            )
+
+            result = await client.call_tool(
+                "get_board_summary", {"mural_id": "mural-abc"}
+            )
+
+        assert "BoardSummary" in result.content[0].text

@@ -8,6 +8,11 @@ from app.integration.linking import exceptions, models, ports
 
 _LEEWAY = datetime.timedelta(seconds=60)
 
+# Fixed by the Mural API, not by deployment.
+_AUTHORIZE_PATH = "/public/v1/authorization/oauth2/"
+_TOKEN_PATH = "/public/v1/authorization/oauth2/token"  # noqa: S105
+_SCOPES = "murals:read identity:read"
+
 
 class OAuthClient:
     """Handles Mural's OAuth code-exchange and refresh flows.
@@ -40,18 +45,18 @@ class OAuthClient:
     @property
     def _token_url(self) -> str:
         base = str(self._config.mural_config.api_base).rstrip("/")
-        return base + self._config.mural_config.token_path  # noqa: S105
+        return base + _TOKEN_PATH
 
     def build_authorization_url(self, state: str) -> str:
         base = str(self._config.mural_config.api_base).rstrip("/")
-        auth_url = base + self._config.mural_config.authorize_path
+        auth_url = base + _AUTHORIZE_PATH
         params = urllib.parse.urlencode(
             {
                 "client_id": self._config.mural_config.client_id,
                 "redirect_uri": self.redirect_uri,
                 "response_type": "code",
                 "state": state,
-                "scope": self._config.mural_config.scopes,
+                "scope": _SCOPES,
             }
         )
         return f"{auth_url}?{params}"

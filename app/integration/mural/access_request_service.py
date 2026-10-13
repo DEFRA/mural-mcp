@@ -6,8 +6,8 @@ from app.integration.mural import exceptions, models, ports
 
 class BoardAccessRequestService:
     """The request -> IAO review -> decision workflow backing
-    BoardGuard's default AllowListBoardGuard (see guard.py). Routers use
-    this, never the store directly.
+    BoardGuard's ApprovedRequestBoardGuard (see guard.py), enabled by
+    SELF_SERVICE_ACCESS_ENABLED. Routers use this, never the store directly.
     """
 
     def __init__(self, store: ports.BoardAccessRequestStore) -> None:
@@ -48,8 +48,8 @@ class BoardAccessRequestService:
         request_id: str,
         reviewer_id: str,
         decision_reason: str,
-        data_handling_form_ref: str,
-        risk_assessment_ref: str,
+        data_handling_form_ref: str | None = None,
+        risk_assessment_ref: str | None = None,
     ) -> models.BoardAccessRequest:
         request = await self._get_pending(request_id)
         request.status = models.AccessRequestStatus.APPROVED

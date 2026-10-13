@@ -18,19 +18,15 @@ class MuralProvider(dishka.Provider):
     def provide_token_store(
         self,
         db: database.AsyncDatabase,  # type: ignore[type-arg]
-        config: app_config.AppConfig,
     ) -> token_store.TokenStore:
-        return mongo_store.MongoTokenStore(db[config.mural_config.token_collection])
+        return mongo_store.MongoTokenStore(db["mural_tokens"])
 
     @dishka.provide(scope=dishka.Scope.APP)
     async def provide_oauth_state_store(
         self,
         db: database.AsyncDatabase,  # type: ignore[type-arg]
-        config: app_config.AppConfig,
     ) -> token_store.OAuthStateStore:
-        store = mongo_store.MongoOAuthStateStore(
-            db[config.mural_config.oauth_state_collection]
-        )
+        store = mongo_store.MongoOAuthStateStore(db["oauth_states"])
         await store.ensure_indexes()
         return store
 
@@ -73,9 +69,12 @@ class MuralProvider(dishka.Provider):
         config: app_config.AppConfig,
         store: approval_ports.BoardAccessRequestStore,
     ) -> guard_module.BoardGuard:
-        """The one line an operator changes to turn enforcement on: bind
-        AllowListBoardGuard once the admin review workflow has real
-        approvals to check against (see RESOURCE_GUARD_MODE)."""
-        if config.resource_guard_mode == "allow_list":
-            return guard_module.AllowListBoardGuard(store)
-        return guard_module.AllowAllBoardGuard()
+        """ALLOWED_BOARD_IDS is always the baseline. With
+        SELF_SERVICE_ACCESS_ENABLED, an approved access request also grants
+        the board."""
+        env_guard = guard_module.EnvAllowListBoardGuard(config.allowed_board_ids)
+        if config.self_service_access_enabled:
+            return guard_module.AnyOfBoardGuard(
+                env_guard, guard_module.ApprovedRequestBoardGuard(store)
+            )
+        return env_guard

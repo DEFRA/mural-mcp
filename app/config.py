@@ -1,26 +1,16 @@
+from typing import Annotated
+
 import pydantic
 import pydantic_settings
+from pydantic_settings import NoDecode
 
 
 class MuralConfig(pydantic_settings.BaseSettings):
     model_config = pydantic_settings.SettingsConfigDict(env_file=".env", extra="ignore")
     api_base: str = pydantic.Field("https://app.mural.co/api", alias="MURAL_API_BASE")
-    authorize_path: str = pydantic.Field(
-        "/public/v1/authorization/oauth2/", alias="MURAL_AUTHORIZE_PATH"
-    )
-    token_path: str = pydantic.Field(
-        "/public/v1/authorization/oauth2/token", alias="MURAL_TOKEN_PATH"
-    )
-    scopes: str = pydantic.Field("murals:read identity:read", alias="MURAL_SCOPES")
     client_id: str = pydantic.Field(..., alias="MURAL_CLIENT_ID")
     client_secret: pydantic.SecretStr = pydantic.Field(..., alias="MURAL_CLIENT_SECRET")
     callback_path: str = pydantic.Field(..., alias="MURAL_CALLBACK_PATH")
-    token_collection: str = pydantic.Field(
-        "mural_tokens", alias="MURAL_TOKEN_COLLECTION"
-    )
-    oauth_state_collection: str = pydantic.Field(
-        "oauth_states", alias="MURAL_OAUTH_STATE_COLLECTION"
-    )
 
 
 class IdentityConfig(pydantic_settings.BaseSettings):
@@ -33,13 +23,6 @@ class IdentityConfig(pydantic_settings.BaseSettings):
 
     rest_auth_mode: str = pydantic.Field("trusted", alias="REST_AUTH_MODE")
     trusted_user_header: str = pydantic.Field("X-User-Id", alias="TRUSTED_USER_HEADER")
-
-    token_prefix: str = pydantic.Field("mmcp_", alias="IDENTITY_TOKEN_PREFIX")
-    default_ttl_days: int = pydantic.Field(90, alias="IDENTITY_DEFAULT_TTL_DAYS")
-    max_ttl_days: int = pydantic.Field(365, alias="IDENTITY_MAX_TTL_DAYS")
-    last_used_throttle_seconds: int = pydantic.Field(
-        300, alias="IDENTITY_LAST_USED_THROTTLE_SECONDS"
-    )
 
 
 class AppConfig(pydantic_settings.BaseSettings):
@@ -60,13 +43,33 @@ class AppConfig(pydantic_settings.BaseSettings):
     base_url: pydantic.HttpUrl = pydantic.Field(..., alias="BASE_URL")
     server_name: str = pydantic.Field("mural-mcp", alias="SERVER_NAME")
 
-    # "allow_all" (default) — every board request succeeds; the governance
-    # workflow (app/integration/resource/) records requests/decisions but
-    # nothing is enforced yet. "allow_list" — BoardService denies access
-    # unless an approved BoardAccessRequest exists for the (user, board)
-    # pair. Flip only once the admin review workflow has real approvals to
-    # check against — flipping first denies all traffic.
-    resource_guard_mode: str = pydantic.Field("allow_all", alias="RESOURCE_GUARD_MODE")
+    # Comma-separated Mural board (mural) ids any authenticated user may read.
+    # This is the baseline access policy: a board not listed here is denied
+    # (unless SELF_SERVICE_ACCESS_ENABLED and the user holds an approved
+    # request for it). "*" allows every board -- local development only.
+    allowed_board_ids: Annotated[list[str], NoDecode] = pydantic.Field(
+        default_factory=list, alias="ALLOWED_BOARD_IDS"
+    )
+
+    # Feature flags, both off by default. Self-service access mounts the
+    # /approvals (request access) and /admin (IAO review) routes and lets an
+    # approved request grant board access on top of ALLOWED_BOARD_IDS.
+    # Data-handling upload additionally requires the approver to record the
+    # data-handling form and risk-assessment references; it has no effect
+    # unless self-service access is on.
+    self_service_access_enabled: bool = pydantic.Field(
+        False, alias="SELF_SERVICE_ACCESS_ENABLED"
+    )
+    data_handling_upload_enabled: bool = pydantic.Field(
+        False, alias="DATA_HANDLING_UPLOAD_ENABLED"
+    )
+
+    @pydantic.field_validator("allowed_board_ids", mode="before")
+    @classmethod
+    def _split_board_ids(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [part.strip() for part in value.split(",") if part.strip()]
+        return value
 
     mural_config: MuralConfig = pydantic.Field(default_factory=MuralConfig)  # type: ignore
     identity_config: IdentityConfig = pydantic.Field(default_factory=IdentityConfig)  # type: ignore

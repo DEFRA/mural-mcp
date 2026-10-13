@@ -33,7 +33,7 @@ class TestProvider(dishka.Provider):
 
     @dishka.provide
     def provide_board_guard(self) -> guard_module.BoardGuard:
-        return guard_module.AllowAllBoardGuard()
+        return guard_module.EnvAllowListBoardGuard(["*"])
 
     @dishka.provide
     def provide_state_store(self) -> token_store.OAuthStateStore:

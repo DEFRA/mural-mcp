@@ -2,9 +2,7 @@ import fastapi
 import pytest
 
 from app.auth import verifier as verifier_port
-from app.identity import service as identity_service
 from app.infra.rest.auth import resolver
-from tests.fakes import in_memory_identity_store
 
 
 def _make_request(headers: dict[str, str] | None = None) -> fastapi.Request:
@@ -27,48 +25,39 @@ class _FakeVerifier:
         return self._result
 
 
-@pytest.fixture
-def identity() -> identity_service.IdentityService:
-    return identity_service.IdentityService(
-        in_memory_identity_store.InMemoryUserStore()
-    )
-
-
 class TestTrustedHeaderUserResolver:
-    async def test_creates_a_user_on_first_sight(
-        self, identity: identity_service.IdentityService
-    ) -> None:
-        resolver_under_test = resolver.TrustedHeaderUserResolver("X-User-Id", identity)
+    async def test_the_asserted_email_is_the_user_id(self) -> None:
+        resolver_under_test = resolver.TrustedHeaderUserResolver("X-User-Id")
 
         principal = await resolver_under_test.resolve(
             _make_request({"X-User-Id": "dev@example.com"})
         )
 
         assert principal.email == "dev@example.com"
-        assert principal.user_id.startswith("usr_")
+        assert principal.user_id == "dev@example.com"
         assert principal.scopes == frozenset()
 
-    async def test_is_stable_across_calls(
-        self, identity: identity_service.IdentityService
-    ) -> None:
-        resolver_under_test = resolver.TrustedHeaderUserResolver("X-User-Id", identity)
+    async def test_normalises_case_and_whitespace(self) -> None:
+        resolver_under_test = resolver.TrustedHeaderUserResolver("X-User-Id")
 
-        first = await resolver_under_test.resolve(
-            _make_request({"X-User-Id": "dev@example.com"})
-        )
-        second = await resolver_under_test.resolve(
-            _make_request({"X-User-Id": "dev@example.com"})
+        principal = await resolver_under_test.resolve(
+            _make_request({"X-User-Id": "  Dev@Example.com "})
         )
 
-        assert first.user_id == second.user_id
+        assert principal.user_id == "dev@example.com"
 
-    async def test_requires_the_header(
-        self, identity: identity_service.IdentityService
-    ) -> None:
-        resolver_under_test = resolver.TrustedHeaderUserResolver("X-User-Id", identity)
+    async def test_requires_the_header(self) -> None:
+        resolver_under_test = resolver.TrustedHeaderUserResolver("X-User-Id")
 
         with pytest.raises(fastapi.HTTPException) as exc_info:
             await resolver_under_test.resolve(_make_request())
+        assert exc_info.value.status_code == 400
+
+    async def test_rejects_a_blank_header(self) -> None:
+        resolver_under_test = resolver.TrustedHeaderUserResolver("X-User-Id")
+
+        with pytest.raises(fastapi.HTTPException) as exc_info:
+            await resolver_under_test.resolve(_make_request({"X-User-Id": "   "}))
         assert exc_info.value.status_code == 400
 
 
@@ -77,7 +66,7 @@ class TestPersonalTokenUserResolver:
         fake = _FakeVerifier(
             verifier_port.VerifiedToken(
                 claims={
-                    "sub": "usr_abc",
+                    "sub": "abc@example.com",
                     "email": "a@example.com",
                     "label": "Claude Code",
                     "token_id": "pat_1",
@@ -90,7 +79,7 @@ class TestPersonalTokenUserResolver:
             _make_request({"Authorization": "Bearer mmcp_something"})
         )
 
-        assert principal.user_id == "usr_abc"
+        assert principal.user_id == "abc@example.com"
         assert principal.email == "a@example.com"
         assert principal.label == "Claude Code"
         assert principal.token_id == "pat_1"

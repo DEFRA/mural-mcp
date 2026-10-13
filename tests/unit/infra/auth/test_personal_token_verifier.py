@@ -8,20 +8,8 @@ _PREFIX = "mmcp_"
 
 
 @pytest.fixture
-def users() -> in_memory_identity_store.InMemoryUserStore:
-    return in_memory_identity_store.InMemoryUserStore()
-
-
-@pytest.fixture
 def pat_store() -> in_memory_identity_store.InMemoryPersonalAccessTokenStore:
     return in_memory_identity_store.InMemoryPersonalAccessTokenStore()
-
-
-@pytest.fixture
-def identity(
-    users: in_memory_identity_store.InMemoryUserStore,
-) -> identity_service.IdentityService:
-    return identity_service.IdentityService(users)
 
 
 @pytest.fixture
@@ -40,9 +28,8 @@ def tokens(
 @pytest.fixture
 def verifier(
     tokens: identity_service.PersonalTokenService,
-    identity: identity_service.IdentityService,
 ) -> personal_token.PersonalTokenVerifier:
-    return personal_token.PersonalTokenVerifier(tokens, identity)
+    return personal_token.PersonalTokenVerifier(tokens)
 
 
 class TestVerify:
@@ -50,15 +37,13 @@ class TestVerify:
         self,
         verifier: personal_token.PersonalTokenVerifier,
         tokens: identity_service.PersonalTokenService,
-        identity: identity_service.IdentityService,
     ) -> None:
-        user = await identity.resolve_or_create("entra-oid-123", email="a@example.com")
-        _, secret = await tokens.mint(user.user_id, "Claude Code")
+        _, secret = await tokens.mint("a@example.com", "Claude Code")
 
         result = await verifier.verify(secret)
 
         assert result is not None
-        assert result.claims["sub"] == user.user_id
+        assert result.claims["sub"] == "a@example.com"
         assert result.claims["email"] == "a@example.com"
         assert result.claims["label"] == "Claude Code"
 
@@ -71,27 +56,8 @@ class TestVerify:
         self,
         verifier: personal_token.PersonalTokenVerifier,
         tokens: identity_service.PersonalTokenService,
-        identity: identity_service.IdentityService,
     ) -> None:
-        user = await identity.resolve_or_create("entra-oid-123")
-        record, secret = await tokens.mint(user.user_id, "Claude Code")
-        await tokens.revoke(user.user_id, record.id)
-
-        assert await verifier.verify(secret) is None
-
-    async def test_returns_none_when_the_user_has_been_deleted(
-        self,
-        verifier: personal_token.PersonalTokenVerifier,
-        tokens: identity_service.PersonalTokenService,
-        identity: identity_service.IdentityService,
-        users: in_memory_identity_store.InMemoryUserStore,
-    ) -> None:
-        """A valid, unexpired token whose owning user no longer exists must
-        not verify — the user could have been deleted after the token was
-        minted.
-        """
-        user = await identity.resolve_or_create("entra-oid-123")
-        _, secret = await tokens.mint(user.user_id, "Claude Code")
-        users._by_user_id.pop(user.user_id)  # noqa: SLF001 -- simulate deletion
+        record, secret = await tokens.mint("a@example.com", "Claude Code")
+        await tokens.revoke("a@example.com", record.id)
 
         assert await verifier.verify(secret) is None

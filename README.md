@@ -33,25 +33,15 @@ The app is configured via environment variables, managed by Pydantic `BaseSettin
 | `AWS_ENDPOINT_URL` | `None` | AWS endpoint override, e.g. for LocalStack in local dev |
 | `HTTP_PROXY` | `None` | Outbound HTTP proxy URL |
 | `TRACING_HEADER` | `x-cdp-request-id` | Request tracing header name |
-| `RESOURCE_GUARD_MODE` | `allow_all` | `allow_all` lets every board request through; `allow_list` denies a board unless an approved access request exists for the (user, board) pair — see [Board access requests](#board-access-requests) |
-| `ACCESS_REQUEST_COLLECTION` | `board_approvals` | Mongo collection for board access requests |
+| `ALLOWED_BOARD_IDS` | _(empty)_ | Comma-separated Mural board ids every authenticated user may read. Anything not listed is denied; empty denies all boards; `*` allows all (local development only) — see [Board access](#board-access) |
+| `SELF_SERVICE_ACCESS_ENABLED` | `false` | Mounts the `/approvals` and `/admin` routes so users can request boards and an IAO can approve them; an approved request grants access on top of `ALLOWED_BOARD_IDS` |
+| `DATA_HANDLING_UPLOAD_ENABLED` | `false` | Only with self-service access on: approvals must carry data-handling form and risk-assessment references. When off, approvals don't collect them |
 | `REST_AUTH_MODE` | `trusted` | `trusted` (network-asserted `X-User-Id` header) or `token` (personal access token) for REST/admin routes. `/mcp` and `/tokens` are unaffected — see [Auth](#auth) |
 | `TRUSTED_USER_HEADER` | `X-User-Id` | Header the portal uses to assert the caller in `trusted` mode |
-| `IDENTITY_TOKEN_PREFIX` | `mmcp_` | Prefix on every minted personal access token |
-| `IDENTITY_DEFAULT_TTL_DAYS` | `90` | Default token lifetime |
-| `IDENTITY_MAX_TTL_DAYS` | `365` | Longest lifetime a caller may request |
-| `IDENTITY_LAST_USED_THROTTLE_SECONDS` | `300` | Minimum interval between `last_used_at` writes for the same token |
-| `USER_COLLECTION` | `users` | Mongo collection for resolved identities |
-| `PAT_COLLECTION` | `personal_access_tokens` | Mongo collection for personal access tokens |
 | `MURAL_API_BASE` | `https://app.mural.co/api` | Mural API base URL |
-| `MURAL_AUTHORIZE_PATH` | `/public/v1/authorization/oauth2/` | Mural OAuth authorize path |
-| `MURAL_TOKEN_PATH` | `/public/v1/authorization/oauth2/token` | Mural OAuth token path |
-| `MURAL_SCOPES` | `murals:read identity:read` | Space-separated Mural OAuth scopes requested |
 | `MURAL_CLIENT_ID` | *(required)* | Mural OAuth app client ID |
 | `MURAL_CLIENT_SECRET` | *(required)* | Mural OAuth app client secret |
 | `MURAL_CALLBACK_PATH` | *(required)* | Path this server's OAuth callback route listens on, e.g. `/connect/mural/callback` |
-| `MURAL_TOKEN_COLLECTION` | `mural_tokens` | Mongo collection for stored Mural OAuth tokens |
-| `MURAL_OAUTH_STATE_COLLECTION` | `oauth_states` | Mongo collection for in-flight OAuth state tokens (TTL-indexed) |
 
 Local development uses a single root `.env` file, loaded by both `compose.yaml` and Pydantic directly. `.env` is gitignored.
 
@@ -74,7 +64,7 @@ The server uses two independent authentication layers.
 
 #### Personal access tokens (AI agent → server)
 
-mural-mcp mints its own bearer tokens rather than validating an external IdP's signature. The portal (which does authenticate the user via Entra) asserts the signed-in user via a trusted `X-User-Id` header against `POST /tokens`; the server resolves that identity to its own opaque `user_id`, mints an opaque token (`mmcp_...`), and returns the plaintext secret exactly once — only its SHA-256 hash is ever persisted, so there is no endpoint that can return it again. The portal shows the token to the user, who pastes it into their MCP client.
+mural-mcp mints its own bearer tokens rather than validating an external IdP's signature. The portal (which does authenticate the user via Entra) asserts the signed-in user via a trusted `X-User-Id` header against `POST /tokens`; the user's (lower-cased) email is the user id throughout — there is no separate generated id — and the server mints an opaque token (`mmcp_...`), and returns the plaintext secret exactly once — only its SHA-256 hash is ever persisted, so there is no endpoint that can return it again. The portal shows the token to the user, who pastes it into their MCP client.
 
 Every request to `/mcp` (and, in `REST_AUTH_MODE=token`, the REST/admin surface) must carry `Authorization: Bearer <token>`. The server looks the token up by hash — no signature to verify, since it minted the token itself — and resolves it to a `Principal`.
 
@@ -87,7 +77,7 @@ sequenceDiagram
 
     User->>Portal: sign in (Entra)
     Portal->>Server: POST /tokens<br/>X-User-Id: user@example.com
-    Server->>Server: resolve-or-create user, mint token
+    Server->>Server: mint token for the asserted email
     Server-->>Portal: {id, token, expires_at} (secret shown once)
     Portal-->>User: display token
     User-->>Agent: paste token into MCP client config
@@ -102,9 +92,9 @@ Tokens can be listed and revoked via `GET /tokens` / `DELETE /tokens/{id}` (same
 
 The server acts as an OAuth client toward Mural. Account linking is driven entirely by the frontend, not by an MCP tool call — the AI agent only ever sees the resulting board tools work or raise "connect your Mural account first":
 
-1. The frontend calls `GET /connect/mural/authorization-url` to get a Mural OAuth URL (scope: `MURAL_SCOPES`).
+1. The frontend calls `GET /connect/mural/authorization-url` to get a Mural OAuth URL (scopes: `murals:read identity:read`).
 2. The user visits the URL and approves access; Mural redirects to the path configured by `MURAL_CALLBACK_PATH`.
-3. The server exchanges the code for an access token and refresh token, storing both (plus expiry) in MongoDB (`MURAL_TOKEN_COLLECTION`).
+3. The server exchanges the code for an access token and refresh token, storing both (plus expiry) in the `mural_tokens` MongoDB collection.
 4. On every board call, the server checks `expires_at` and automatically refreshes if the token is expired or about to expire.
 
 ```mermaid
@@ -122,20 +112,24 @@ sequenceDiagram
     Mural->>Server: GET <MURAL_CALLBACK_PATH>?code=...&state=...
     Server->>Mural: exchange code for tokens
     Mural-->>Server: access_token + refresh_token + expires_in
-    Server->>Mongo: store in MURAL_TOKEN_COLLECTION keyed by user_id
+    Server->>Mongo: store in mural_tokens keyed by the user's email
     Note over Server,Mongo: On board calls, server auto-refreshes<br/>tokens at or past expires_at
 ```
 
-### Board access requests
+### Board access
 
-Board access is governed by `RESOURCE_GUARD_MODE`. In `allow_list` mode, a user must have an approved `BoardAccessRequest` for a given board before any board tool/route will serve it:
+Board access is governed by an environment allow list. `ALLOWED_BOARD_IDS` names the boards every authenticated user may read; any other board is denied before the Mural API is called. An empty list denies everything, so set it deliberately.
 
-- `POST /approvals/boards` — the user requests access to a board, naming an Information Asset Owner (IAO) and a reason.
-- `GET /approvals/boards/{board_id}` — the user checks the status of their request.
-- `GET /admin/access-requests` — the portal lists pending requests for IAO review.
-- `POST /admin/access-requests/{request_id}/approve` / `.../reject` — the portal records the IAO's decision, including (for approvals) references to the data-handling form and risk assessment.
+Two feature flags, both off by default, add a self-service workflow on top:
 
-In `allow_all` mode (the default), this workflow still records requests and decisions, but nothing is enforced — flip to `allow_list` only once the admin review workflow has real approvals to check against, since flipping first denies all traffic.
+- `SELF_SERVICE_ACCESS_ENABLED` mounts these routes, and an approved request then grants that user access to that board in addition to the allow list:
+  - `POST /approvals/boards` — the user requests access to a board, naming an Information Asset Owner (IAO) and a reason.
+  - `GET /approvals/boards/{board_id}` — the user checks the status of their request.
+  - `GET /admin/access-requests` — the portal lists pending requests for IAO review.
+  - `POST /admin/access-requests/{request_id}/approve` / `.../reject` — the portal records the IAO's decision.
+- `DATA_HANDLING_UPLOAD_ENABLED` (needs self-service on) makes an approval carry `dataHandlingFormRef` and `riskAssessmentRef`, returning 422 without them. With it off, approvals don't collect them and any supplied references are discarded.
+
+With both flags off, none of the request/approval routes exist (404).
 
 ### Local development
 

@@ -25,7 +25,6 @@ def _build_app_and_overrides():
         tokens=None,
         states=None,
         access_requests=None,
-        users=None,
         pats=None,
     )
     return entrypoint.create_app(cfg, container=container), overrides, cfg
@@ -66,21 +65,10 @@ class TestRejectsInvalidTokens:
         _assert_rejected(response)
 
     async def test_a_revoked_token(self):
-        app, overrides, cfg = _build_app_and_overrides()
-        identity_svc = identity_service.IdentityService(overrides.users)
-        user = await identity_svc.resolve_or_create(
-            "u@example.com", email="u@example.com"
-        )
-        ic = cfg.identity_config
-        token_svc = identity_service.PersonalTokenService(
-            overrides.pats,
-            token_prefix=ic.token_prefix,
-            default_ttl_days=ic.default_ttl_days,
-            max_ttl_days=ic.max_ttl_days,
-            last_used_throttle_seconds=ic.last_used_throttle_seconds,
-        )
-        record, secret = await token_svc.mint(user.user_id, "test client")
-        await token_svc.revoke(user.user_id, record.id)
+        app, overrides, _cfg = _build_app_and_overrides()
+        token_svc = identity_service.PersonalTokenService(overrides.pats)
+        record, secret = await token_svc.mint("u@example.com", "test client")
+        await token_svc.revoke("u@example.com", record.id)
 
         response = await _post_to_mcp(
             app, {**_MCP_HEADERS, "Authorization": f"Bearer {secret}"}
@@ -112,4 +100,4 @@ class TestAcceptsAValidToken:
                 "get_connections",
                 "find_widgets",
             }
-            assert user_id.startswith("usr_")
+            assert user_id == "mcp-test-user@example.com"

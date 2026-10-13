@@ -1,5 +1,5 @@
 """End-to-end wiring test for the token-management surface: mint via the
-real IdentityService/PersonalTokenService/PersonalTokenVerifier stack
+real PersonalTokenService/PersonalTokenVerifier stack
 (storage faked, everything else real), then use the minted token against a
 protected route through the same get_principal dependency /mcp and the
 other REST routers rely on. This is the thing unit tests on individual
@@ -31,18 +31,8 @@ class _Provider(dishka.Provider):
     scope = dishka.Scope.APP
 
     @dishka.provide
-    def provide_user_store(self) -> ports.UserStore:
-        return in_memory_identity_store.InMemoryUserStore()
-
-    @dishka.provide
     def provide_pat_store(self) -> ports.PersonalAccessTokenStore:
         return in_memory_identity_store.InMemoryPersonalAccessTokenStore()
-
-    @dishka.provide
-    def provide_identity_service(
-        self, users: ports.UserStore
-    ) -> identity_service.IdentityService:
-        return identity_service.IdentityService(users)
 
     @dishka.provide
     def provide_token_service(
@@ -60,9 +50,8 @@ class _Provider(dishka.Provider):
     def provide_token_verifier(
         self,
         tokens: identity_service.PersonalTokenService,
-        users: identity_service.IdentityService,
     ) -> verifier_port.TokenVerifier:
-        return personal_token.PersonalTokenVerifier(tokens, users)
+        return personal_token.PersonalTokenVerifier(tokens)
 
     @dishka.provide
     def provide_user_resolver(
@@ -127,7 +116,7 @@ class TestPersonalTokens:
                 "/protected", headers={"Authorization": f"Bearer {secret}"}
             )
             assert protected.status_code == 200
-            assert protected.json()["user_id"].startswith("usr_")
+            assert protected.json()["user_id"] == "dev@example.com"
 
             listing = client.get("/tokens", headers={"X-User-Id": "dev@example.com"})
             assert listing.status_code == 200

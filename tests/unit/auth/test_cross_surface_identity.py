@@ -44,9 +44,7 @@ class TestCrossSurfaceIdentity:
     async def test_mcp_and_rest_resolve_the_same_token_to_the_same_user_id(
         self,
     ) -> None:
-        users = in_memory_identity_store.InMemoryUserStore()
         tokens = in_memory_identity_store.InMemoryPersonalAccessTokenStore()
-        identity = identity_service.IdentityService(users)
         token_service = identity_service.PersonalTokenService(
             tokens,
             token_prefix=_PREFIX,
@@ -54,10 +52,9 @@ class TestCrossSurfaceIdentity:
             max_ttl_days=365,
             last_used_throttle_seconds=300,
         )
-        verifier = personal_token.PersonalTokenVerifier(token_service, identity)
+        verifier = personal_token.PersonalTokenVerifier(token_service)
 
-        user = await identity.resolve_or_create("entra-oid-123", email="a@example.com")
-        _, secret = await token_service.mint(user.user_id, "Claude Code")
+        _, secret = await token_service.mint("a@example.com", "Claude Code")
 
         # REST: app.infra.rest.auth.resolver.PersonalTokenUserResolver.
         rest_resolver = resolver.PersonalTokenUserResolver(verifier)
@@ -82,5 +79,5 @@ class TestCrossSurfaceIdentity:
                 unittest.mock.MagicMock()
             )
 
-        assert rest_principal.user_id == mcp_principal.user_id == user.user_id
+        assert rest_principal.user_id == mcp_principal.user_id == "a@example.com"
         assert rest_principal.email == mcp_principal.email == "a@example.com"

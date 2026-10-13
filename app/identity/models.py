@@ -3,22 +3,6 @@ import datetime
 import pydantic
 
 
-class User(pydantic.BaseModel):
-    """A caller identity.
-
-    Created the first time a portal asserts an external identity via the
-    trusted-header mint route. ``user_id`` is the only identifier the rest of
-    the domain (Mural tokens, board approvals) ever sees; ``external_id`` is
-    what lets a repeat visit from the same portal-asserted identity resolve
-    back to the same user rather than minting a duplicate.
-    """
-
-    user_id: str
-    external_id: str
-    email: str | None = None
-    created_at: datetime.datetime
-
-
 class PersonalAccessToken(pydantic.BaseModel):
     """A minted personal access token record.
 
@@ -27,7 +11,7 @@ class PersonalAccessToken(pydantic.BaseModel):
     """
 
     id: str
-    user_id: str
+    user_id: str  # the owner's email, as asserted by the portal
     token_hash: str
     prefix: str
     label: str
