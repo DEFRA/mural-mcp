@@ -38,10 +38,8 @@ class TraceIdMiddleware(base.BaseHTTPMiddleware):
     a `RequestContext` on the ASGI scope for the container middleware to pick
     up."""
 
-    def __init__(
-        self, app: fastapi.FastAPI, cfg: app_config.AppConfig, **kwargs: Any
-    ) -> None:
-        super().__init__(app, **kwargs)
+    def __init__(self, app: ASGIApp, cfg: app_config.AppConfig) -> None:
+        super().__init__(app)
         self._tracing_header = cfg.tracing_header
 
     async def dispatch(
