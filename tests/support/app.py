@@ -120,6 +120,9 @@ def real_config(**field_overrides: object) -> app_config.AppConfig:
         client_id="test-client-id",
         client_secret=pydantic.SecretStr("test-secret"),
         callback_path="/callback",
+        asset_hosts=["example.com"],
+        image_max_bytes=5_000_000,
+        image_cache_bytes=5_000_000,
     )
     defaults: dict[str, object] = {
         "base_url": "http://example.com",

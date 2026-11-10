@@ -12,6 +12,25 @@ class MuralConfig(pydantic_settings.BaseSettings):
     client_secret: pydantic.SecretStr = pydantic.Field(..., alias="MURAL_CLIENT_SECRET")
     callback_path: str = pydantic.Field(..., alias="MURAL_CALLBACK_PATH")
 
+    # Host suffixes Mural serves board images and files from. Signed asset URLs
+    # come from the API response, so this guards against fetching anywhere else.
+    asset_hosts: Annotated[list[str], NoDecode] = pydantic.Field(
+        default_factory=lambda: ["mural.co"], alias="MURAL_ASSET_HOSTS"
+    )
+    image_max_bytes: int = pydantic.Field(
+        20 * 1024 * 1024, alias="MURAL_IMAGE_MAX_BYTES"
+    )
+    image_cache_bytes: int = pydantic.Field(
+        100 * 1024 * 1024, alias="MURAL_IMAGE_CACHE_BYTES"
+    )
+
+    @pydantic.field_validator("asset_hosts", mode="before")
+    @classmethod
+    def _split_asset_hosts(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [part.strip() for part in value.split(",") if part.strip()]
+        return value
+
 
 class IdentityConfig(pydantic_settings.BaseSettings):
     """Personal-access-token identity: how this server verifies its own

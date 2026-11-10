@@ -103,5 +103,6 @@ class TestAcceptsAValidToken:
                 "get_region",
                 "get_connections",
                 "find_widgets",
+                "get_image",
             }
             assert user_id == "mcp-test-user@example.com"

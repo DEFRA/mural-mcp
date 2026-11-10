@@ -6,9 +6,11 @@ from app import config as app_config
 from app.integration.linking import exceptions, oauth_client
 from app.integration.mural import guard as guard_module
 from app.integration.mural.board import errors as board_exceptions
+from app.integration.mural.board import images as images_module
 from app.integration.mural.board.parsing import grouping as strategy_base
 from app.integration.mural.board.parsing import models as nodes
 from app.integration.mural.board.parsing import parser
+from app.integration.mural.board.parsing import schemas as widget_schemas
 from app.integration.mural.board.parsing import spatial as spatial_strategy
 from app.integration.mural.board.parsing import summary as summary_builder
 from app.integration.mural.board.rendering import msx as msx_renderer
@@ -34,6 +36,7 @@ class BoardService:
         renderer: msx_renderer.WidgetMsxRenderer,
         summary_renderer: summary_renderer.SummaryMsxRenderer,
         guard: guard_module.BoardGuard,
+        images: images_module.ImageLoader,
     ) -> None:
         self._config = config
         self._client = client
@@ -41,6 +44,57 @@ class BoardService:
         self._renderer = renderer
         self._summary_renderer = summary_renderer
         self._guard = guard
+        self._images = images
+
+    async def fetch_image(
+        self,
+        user_id: str,
+        mural_id: str,
+        widget_id: str,
+        size: images_module.ImageSize,
+    ) -> tuple[str, images_module.ProcessedImage]:
+        """Return an MSX label and the processed bytes for an image widget.
+
+        Fetches just this widget, so the signed URL it carries is fresh.
+        """
+        await self._guard.check(user_id, mural_id)
+        access_token = await self._oauth.get_valid_token(user_id)
+        widget = await self._fetch_widget(mural_id, widget_id, access_token)
+
+        url, mask = self._image_source(widget)
+        key = (
+            mural_id,
+            widget.id,
+            widget.updated_on,
+            widget.content_edited_on,
+            size,
+        )
+        processed = await self._images.load(key=key, url=url, size=size, mask=mask)
+        return self._renderer.render_widget(widget), processed
+
+    @staticmethod
+    def _image_source(
+        widget: nodes.AnyWidget,
+    ) -> tuple[str, widget_schemas.ImageMask | None]:
+        """Pick the URL to download, refusing what the board restricts."""
+        if isinstance(widget, widget_schemas.ImageWidget):
+            url, mask = widget.url, widget.mask
+        elif isinstance(widget, widget_schemas.FileWidget):
+            # A file's own url is the file itself; null means downloads are
+            # restricted, in which case its preview is withheld too.
+            url = widget.preview_url if widget.url else None
+            mask = None
+            if widget.url and not widget.preview_url:
+                msg = f'File "{widget.id}" has no preview to show.'
+                raise board_exceptions.ImageNotAvailableError(msg)
+        else:
+            msg = f'Widget "{widget.id}" is not an image or a file with a preview.'
+            raise board_exceptions.WidgetNotAnImageError(msg)
+
+        if not url:
+            msg = "Image downloads are restricted on this board."
+            raise board_exceptions.ImageRestrictedError(msg)
+        return url, mask
 
     async def _load(
         self,
@@ -119,30 +173,38 @@ class BoardService:
 
         return self._renderer.render_widgets((w.id for w in matches), tree)
 
+    def _widgets_url(self, mural_id: str) -> str:
+        api_base = self._config.mural_config.api_base.rstrip("/")
+        return f"{api_base}/public/v1/murals/{mural_id}/widgets"
+
+    async def _get_json(
+        self, url: str, params: dict[str, str] | None, access_token: str
+    ) -> Any:
+        try:
+            response = await self._client.get(
+                url,
+                params=params,
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+        except httpx2.RequestError as exc:
+            raise exceptions.MuralUnavailableError(str(exc)) from exc
+
+        try:
+            response.raise_for_status()
+        except httpx2.HTTPStatusError as exc:
+            raise exceptions.MuralApiError(response.status_code) from exc
+        return response.json()
+
     async def _fetch_widgets(
         self, mural_id: str, access_token: str
     ) -> list[dict[str, Any]]:
-        api_base = self._config.mural_config.api_base.rstrip("/")
-        base_url = f"{api_base}/public/v1/murals/{mural_id}/widgets"
+        base_url = self._widgets_url(mural_id)
         url: str | None = base_url
         next_params: dict[str, str] | None = None
         all_widgets: list[dict[str, Any]] = []
 
         while url:
-            try:
-                response = await self._client.get(
-                    url,
-                    params=next_params,
-                    headers={"Authorization": f"Bearer {access_token}"},
-                )
-            except httpx2.RequestError as exc:
-                raise exceptions.MuralUnavailableError(str(exc)) from exc
-
-            try:
-                response.raise_for_status()
-            except httpx2.HTTPStatusError as exc:
-                raise exceptions.MuralApiError(response.status_code) from exc
-            data = response.json()
+            data = await self._get_json(url, next_params, access_token)
 
             page = data.get("value", data) if isinstance(data, dict) else data
             all_widgets.extend(page)
@@ -155,6 +217,21 @@ class BoardService:
             url, next_params = resolved
 
         return all_widgets
+
+    async def _fetch_widget(
+        self, mural_id: str, widget_id: str, access_token: str
+    ) -> nodes.AnyWidget:
+        url = f"{self._widgets_url(mural_id)}/{widget_id}"
+        try:
+            data = await self._get_json(url, None, access_token)
+        except exceptions.MuralApiError as exc:
+            if exc.status_code == httpx2.codes.NOT_FOUND:
+                msg = f'Widget "{widget_id}" not found on board {mural_id}.'
+                raise board_exceptions.WidgetNotFoundError(msg) from exc
+            raise
+
+        payload = data["value"] if isinstance(data.get("value"), dict) else data
+        return parser.parse_widgets([payload])[0]
 
     @staticmethod
     def _resolve_next(

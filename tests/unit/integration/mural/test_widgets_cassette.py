@@ -12,6 +12,7 @@ import pytest
 from app.common import http_client
 from app.integration.mural import guard as guard_module
 from app.integration.mural import service as board_service
+from app.integration.mural.board import images as board_images
 from app.integration.mural.board.rendering import msx as widget_msx
 from app.integration.mural.board.rendering import registry
 from app.integration.mural.board.rendering import summary as summary_renderer
@@ -39,6 +40,10 @@ class TestSearchWidgets:
                 renderer=widget_msx.WidgetMsxRenderer(reg),
                 summary_renderer=summary_renderer.SummaryMsxRenderer(reg),
                 guard=guard_module.EnvAllowListBoardGuard(["*"]),
+                images=board_images.ImageLoader(
+                    board_images.ImageFetcher(client, ["example.com"], 1000),
+                    board_images.ProcessedImageCache(1000),
+                ),
             )
 
             msx_output = await service.search_widgets(

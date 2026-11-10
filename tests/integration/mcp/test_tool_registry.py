@@ -17,6 +17,7 @@ _EXPECTED_SCHEMAS = {
     "get_region": {"mural_id", "region_id", "use_spatial_grouping"},
     "get_connections": {"mural_id", "widget_id"},
     "find_widgets": {"mural_id", "query", "widget_type"},
+    "get_image": {"mural_id", "widget_id", "size"},
 }
 
 _EXPECTED_REQUIRED = {
@@ -24,11 +25,12 @@ _EXPECTED_REQUIRED = {
     "get_region": {"mural_id", "region_id"},
     "get_connections": {"mural_id", "widget_id"},
     "find_widgets": {"mural_id"},
+    "get_image": {"mural_id", "widget_id"},
 }
 
 
 class TestRegistration:
-    async def test_exposes_exactly_the_four_board_tools(self):
+    async def test_exposes_exactly_the_board_tools(self):
         async with mcp_registry_client() as client:
             tools = await client.list_tools()
 
