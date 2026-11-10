@@ -23,6 +23,7 @@ dependencies = [
     "urllib3==2.8.0",
     "uvicorn==0.54.0",
     "httpx2==2.13.1",
+    "pillow==12.3.0",
 ]
 
 [dependency-groups]

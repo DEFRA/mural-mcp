@@ -42,17 +42,21 @@ The app is configured via environment variables, managed by Pydantic `BaseSettin
 | `MURAL_CLIENT_ID` | *(required)* | Mural OAuth app client ID |
 | `MURAL_CLIENT_SECRET` | *(required)* | Mural OAuth app client secret |
 | `MURAL_CALLBACK_PATH` | *(required)* | Path this server's OAuth callback route listens on, e.g. `/connect/mural/callback` |
+| `MURAL_ASSET_HOSTS` | `mural.co` | Comma-separated host suffixes board images may be downloaded from (HTTPS only; subdomains match). `get_image` refuses any other host, so add the host here if it reports one |
+| `MURAL_IMAGE_MAX_BYTES` | `20971520` | Largest image `get_image` will download |
+| `MURAL_IMAGE_CACHE_BYTES` | `104857600` | Memory used to cache processed images between calls |
 
 Local development uses a single root `.env` file, loaded by both `compose.yaml` and Pydantic directly. `.env` is gitignored.
 
 ## MCP Tools
 
-The server exposes four tools to AI agents, resolved against the current `Principal` (see [Auth](#auth) — no `user_id` parameter is passed explicitly):
+The server exposes five tools to AI agents, resolved against the current `Principal` (see [Auth](#auth) — no `user_id` parameter is passed explicitly):
 
 - **`get_board_summary(mural_id, use_spatial_grouping=False)`** — Returns a compact MSX summary of the board's top-level regions, with labels, widget counts, and bounds.
 - **`get_region(mural_id, region_id, use_spatial_grouping=False)`** — Returns full MSX for all widgets within a board region (an area, or a spatial group when `use_spatial_grouping=True`).
 - **`get_connections(mural_id, widget_id)`** — Returns all arrows connected to a widget and their resolved endpoints.
 - **`find_widgets(mural_id, query=None, widget_type=None)`** — Searches board widgets by text content and/or widget type; at least one of `query`/`widget_type` is required.
+- **`get_image(mural_id, widget_id, size="preview")`** — Returns one image widget (or the preview of a file widget) as an image the agent can look at, preceded by its MSX label. The image is cropped as shown on the board and resized on the server (`preview` ≈ 1024px, `full` ≈ 1568px on the long edge). Boards with Mural's download restriction turned on are refused. In MSX, an `<Image>` with `viewable="true"` can be loaded this way; `restricted="true"` cannot.
 
 Connecting/disconnecting a Mural account is a frontend concern, not an MCP tool — the frontend drives it via the REST routes under `/connect` (`GET /connect/mural/authorization-url`, `GET /connect/mural/callback`) — see [API endpoints](#api-endpoints).
 

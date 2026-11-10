@@ -6,11 +6,16 @@ MCP client actually sees them: `result.is_error` and the message in
 `result.content[0].text`, not just an exception type on a direct call.
 """
 
+import base64
 import datetime
+import io
 
 import httpx2
+import pytest
+from PIL import Image
 
 from app.integration.mural import models
+from tests.fixtures import mural
 from tests.support.app import mcp_client
 
 _EMPTY_WIDGETS = httpx2.Response(200, json={"value": []})
@@ -157,3 +162,98 @@ class TestErrorEnvelopes:
             )
 
         assert "BoardSummary" in result.content[0].text
+
+
+def _png_response() -> httpx2.Response:
+    out = io.BytesIO()
+    Image.new("RGB", (400, 200), (1, 2, 3)).save(out, format="PNG")
+    return httpx2.Response(
+        200, content=out.getvalue(), headers={"content-type": "image/png"}
+    )
+
+
+def _widget_response(widget: dict) -> httpx2.Response:
+    return httpx2.Response(200, json={"value": widget})
+
+
+class TestGetImage:
+    async def test_returns_a_label_then_the_image(self):
+        async with mcp_client(
+            mural_token="mural-tok",
+            responses=[
+                _widget_response(mural.image("img-1", caption="Draft")),
+                _png_response(),
+            ],
+        ) as (client, _overrides, _user_id):
+            result = await client.call_tool(
+                "get_image", {"mural_id": "mural-abc", "widget_id": "img-1"}
+            )
+
+        label, picture = result.content
+        assert label.type == "text"
+        assert label.text.startswith('<Image id="img-1"')
+        assert "Draft" in label.text
+        assert "sig=" not in label.text
+        assert picture.type == "image"
+        assert picture.mime_type == "image/png"
+        assert Image.open(io.BytesIO(base64.b64decode(picture.data))).size == (400, 200)
+
+    async def test_full_size_is_accepted(self):
+        async with mcp_client(
+            mural_token="mural-tok",
+            responses=[_widget_response(mural.image("img-1")), _png_response()],
+        ) as (client, _overrides, _user_id):
+            result = await client.call_tool(
+                "get_image",
+                {"mural_id": "mural-abc", "widget_id": "img-1", "size": "full"},
+            )
+
+        assert not result.is_error
+
+    @pytest.mark.parametrize(
+        ("responses", "expected"),
+        [
+            ([httpx2.Response(404)], "not found"),
+            ([_widget_response(mural.sticky("img-1"))], "not an image"),
+            (
+                [_widget_response(mural.image("img-1", url=None))],
+                "restricted on this board",
+            ),
+            (
+                [_widget_response(mural.image("img-1", url="https://evil.test/x"))],
+                "evil.test",
+            ),
+            (
+                [_widget_response(mural.image("img-1")), httpx2.Response(403)],
+                "may have expired",
+            ),
+        ],
+        ids=["missing", "not-an-image", "restricted", "other-host", "expired"],
+    )
+    async def test_failures_are_plain_errors(self, responses, expected):
+        async with mcp_client(mural_token="mural-tok", responses=responses) as (
+            client,
+            _overrides,
+            _user_id,
+        ):
+            result = await client.call_tool(
+                "get_image",
+                {"mural_id": "mural-abc", "widget_id": "img-1"},
+                raise_on_error=False,
+            )
+
+        assert result.is_error
+        assert expected in result.content[0].text
+        assert "sig=" not in result.content[0].text
+
+    async def test_a_board_the_user_may_not_read_is_forbidden(self):
+        async with mcp_client(
+            mural_token="mural-tok", responses=[], allowed_board_ids=["other-board"]
+        ) as (client, _overrides, _user_id):
+            result = await client.call_tool(
+                "get_image",
+                {"mural_id": "mural-abc", "widget_id": "img-1"},
+                raise_on_error=False,
+            )
+
+        assert result.is_error

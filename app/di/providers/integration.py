@@ -8,6 +8,7 @@ from app.integration.mural import access_request_service
 from app.integration.mural import guard as guard_module
 from app.integration.mural import mongo_store as approval_mongo_store
 from app.integration.mural import ports as approval_ports
+from app.integration.mural.board import images as board_images
 from app.integration.mural.board.rendering import msx as widget_msx
 from app.integration.mural.board.rendering import registry as widget_registry
 from app.integration.mural.board.rendering import summary as summary_renderer
@@ -49,6 +50,12 @@ class MuralProvider(dishka.Provider):
         reg: widget_registry.WidgetRendererRegistry,
     ) -> summary_renderer.SummaryMsxRenderer:
         return summary_renderer.SummaryMsxRenderer(reg)
+
+    @dishka.provide(scope=dishka.Scope.APP)
+    def provide_processed_image_cache(
+        self, config: app_config.AppConfig
+    ) -> board_images.ProcessedImageCache:
+        return board_images.ProcessedImageCache(config.mural_config.image_cache_bytes)
 
     @dishka.provide(scope=dishka.Scope.APP)
     def provide_board_access_request_store(

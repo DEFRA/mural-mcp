@@ -11,6 +11,7 @@ from app.integration.linking import service as linking_service
 from app.integration.mural import connection_test_service
 from app.integration.mural import guard as guard_module
 from app.integration.mural import service as board_service
+from app.integration.mural.board import images as board_images
 from app.integration.mural.board.rendering import msx as widget_msx
 from app.integration.mural.board.rendering import summary as summary_renderer
 
@@ -71,6 +72,19 @@ class RequestScopeProvider(dishka.Provider):
         )
 
     @dishka.provide
+    def provide_image_loader(
+        self,
+        config: app_config.AppConfig,
+        client: httpx2.AsyncClient,
+        cache: board_images.ProcessedImageCache,
+    ) -> board_images.ImageLoader:
+        mural = config.mural_config
+        fetcher = board_images.ImageFetcher(
+            client, mural.asset_hosts, mural.image_max_bytes
+        )
+        return board_images.ImageLoader(fetcher, cache)
+
+    @dishka.provide
     def provide_board_service(
         self,
         config: app_config.AppConfig,
@@ -79,6 +93,7 @@ class RequestScopeProvider(dishka.Provider):
         renderer: widget_msx.WidgetMsxRenderer,
         sum_renderer: summary_renderer.SummaryMsxRenderer,
         guard: guard_module.BoardGuard,
+        images: board_images.ImageLoader,
     ) -> board_service.BoardService:
         return board_service.BoardService(
             config=config,
@@ -87,4 +102,5 @@ class RequestScopeProvider(dishka.Provider):
             renderer=renderer,
             summary_renderer=sum_renderer,
             guard=guard,
+            images=images,
         )

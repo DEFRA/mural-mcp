@@ -82,3 +82,23 @@ class TestIdentityConfig:
         )
 
         assert cfg.identity_config.rest_auth_mode == "token"
+
+
+class TestImageConfig:
+    def test_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("MURAL_ASSET_HOSTS", raising=False)
+        config = MuralConfig(
+            MURAL_CLIENT_ID="id", MURAL_CLIENT_SECRET="s", MURAL_CALLBACK_PATH="/cb"
+        )
+        assert config.asset_hosts == ["mural.co"]
+        assert config.image_max_bytes == 20 * 1024 * 1024
+        assert config.image_cache_bytes == 100 * 1024 * 1024
+
+    def test_asset_hosts_come_from_a_comma_separated_env_var(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("MURAL_ASSET_HOSTS", "mural.co, cdn.example.com ,,")
+        config = MuralConfig(
+            MURAL_CLIENT_ID="id", MURAL_CLIENT_SECRET="s", MURAL_CALLBACK_PATH="/cb"
+        )
+        assert config.asset_hosts == ["mural.co", "cdn.example.com"]

@@ -1,8 +1,10 @@
 from collections.abc import Awaitable
+from typing import Literal
 
 import dishka
 import fastmcp
 from fastmcp.exceptions import ToolError
+from fastmcp.utilities import types as mcp_types
 
 from app.auth import principal as principal_module
 from app.infra.mcp import dishka_inject
@@ -55,6 +57,11 @@ async def _call[T](work: Awaitable[T]) -> T:
         raise _region_not_found_error(err) from err
     except parse_exceptions.BoardParseError as err:
         raise _board_parse_error() from err
+    except (
+        board_exceptions.WidgetNotFoundError,
+        board_exceptions.BoardImageError,
+    ) as err:
+        raise ToolError(str(err)) from err
 
 
 @dishka_inject.inject
@@ -80,7 +87,10 @@ async def get_region(
     principal: dishka.FromDishka[principal_module.Principal],
     use_spatial_grouping: bool = False,
 ) -> str:
-    """Return full MSX for all widgets within a board region (area or spatial group)."""
+    """Return full MSX for all widgets within a board region (area or spatial group).
+
+    Image widgets can be viewed with get_image.
+    """
     return await _call(
         board.fetch_region(principal.user_id, mural_id, region_id, use_spatial_grouping)
     )
@@ -109,7 +119,8 @@ async def find_widgets(
 ) -> str:
     """Search board widgets by text content and/or widget type.
 
-    At least one of query or widget_type must be provided.
+    At least one of query or widget_type must be provided. Image widgets can be
+    viewed with get_image.
     """
     if not query and not widget_type:
         return "Provide at least one of: query, widget_type."
@@ -119,8 +130,30 @@ async def find_widgets(
     )
 
 
+@dishka_inject.inject
+async def get_image(
+    mural_id: str,
+    widget_id: str,
+    _ctx: fastmcp.Context,
+    board: dishka.FromDishka[board_service_module.BoardService],
+    principal: dishka.FromDishka[principal_module.Principal],
+    size: Literal["preview", "full"] = "preview",
+) -> list[str | mcp_types.Image]:
+    """Return one image (or file preview) from the board so you can look at it.
+
+    Use the id of an Image widget, or of a File widget with has_preview="true".
+    The image is cropped as shown on the board. size="preview" is about 1024px
+    on the long edge; use "full" (up to 1568px) only when you need fine detail.
+    """
+    label, image = await _call(
+        board.fetch_image(principal.user_id, mural_id, widget_id, size)
+    )
+    return [label, mcp_types.Image(data=image.data, format=image.format)]
+
+
 def register_tools(mcp_app: fastmcp.FastMCP) -> None:
     mcp_app.tool()(get_board_summary)
     mcp_app.tool()(get_region)
     mcp_app.tool()(get_connections)
     mcp_app.tool()(find_widgets)
+    mcp_app.tool()(get_image)

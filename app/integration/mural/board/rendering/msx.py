@@ -1,7 +1,7 @@
 import html
 from collections.abc import Iterable
 
-from app.integration.mural.board.parsing import models
+from app.integration.mural.board.parsing import models, parser
 from app.integration.mural.board.parsing import schemas as widget_schemas
 from app.integration.mural.board.rendering import registry
 
@@ -42,9 +42,10 @@ def _render_node(
     tree: models.WidgetTree,
     reg: registry.WidgetRendererRegistry,
     indent: int,
+    force: bool = False,
 ) -> list[str]:
     node = tree.resolve(node_id)
-    if not _is_shown(node):
+    if not force and not _is_shown(node):
         return []
     tag = reg.get_tag_name(node)
     attr_str = format_attrs(reg.get_attrs(node))
@@ -91,6 +92,13 @@ class WidgetMsxRenderer:
 
     def render_subtree(self, tree: models.WidgetTree, root_id: str) -> str:
         return render_subtree(tree, root_id, self._reg)
+
+    def render_widget(self, widget: models.AnyWidget) -> str:
+        """MSX for one widget on its own, shown even if hidden on the board."""
+        lines = _render_node(
+            widget.id, parser.build_tree([widget]), self._reg, indent=0, force=True
+        )
+        return "\n".join(lines)
 
     def render_widgets(self, widget_ids: Iterable[str], tree: models.WidgetTree) -> str:
         lines: list[str] = []

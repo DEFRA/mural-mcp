@@ -1,10 +1,14 @@
+import io
+
 import httpx2
 import pytest
+from PIL import Image
 
 from app.integration.linking import exceptions
 from app.integration.mural import guard as guard_module
 from app.integration.mural import service as board_service
 from app.integration.mural.board import errors as board_exceptions
+from app.integration.mural.board import images as board_images
 from app.integration.mural.board.rendering import msx as widget_msx
 from app.integration.mural.board.rendering import registry as widget_registry
 from app.integration.mural.board.rendering import summary as summary_renderer
@@ -13,7 +17,9 @@ from tests.fakes import (
     httpx_helpers,
     in_memory_board_access_request_store,
 )
+from tests.fixtures import mural
 
+_MAX_IMAGE_BYTES = 5_000_000
 _REG = widget_registry.build_default_registry()
 _RENDERER = widget_msx.WidgetMsxRenderer(_REG)
 _SUMMARY_RENDERER = summary_renderer.SummaryMsxRenderer(_REG)
@@ -38,6 +44,10 @@ def make_service(fake_config):
             renderer=_RENDERER,
             summary_renderer=_SUMMARY_RENDERER,
             guard=guard or guard_module.EnvAllowListBoardGuard(["*"]),
+            images=board_images.ImageLoader(
+                board_images.ImageFetcher(client, ["example.com"], _MAX_IMAGE_BYTES),
+                board_images.ProcessedImageCache(_MAX_IMAGE_BYTES),
+            ),
         )
         return service, transport
 
@@ -397,8 +407,17 @@ class TestGuardEnforcement:
                 "user-123", "mural-abc", "widget-1"
             ),
             lambda service: service.search_widgets("user-123", "mural-abc", "q", None),
+            lambda service: service.fetch_image(
+                "user-123", "mural-abc", "widget-1", "preview"
+            ),
         ],
-        ids=["fetch_summary", "fetch_region", "fetch_connections", "search_widgets"],
+        ids=[
+            "fetch_summary",
+            "fetch_region",
+            "fetch_connections",
+            "search_widgets",
+            "fetch_image",
+        ],
     )
     async def test_a_denied_guard_blocks_every_public_method_before_any_vendor_call(
         self, make_service, call
@@ -417,3 +436,139 @@ class TestGuardEnforcement:
             await call(service)
 
         assert transport.requests == []
+
+
+def _png_response(size=(400, 200)) -> httpx2.Response:
+    out = io.BytesIO()
+    Image.new("RGB", size, (1, 2, 3)).save(out, format="PNG")
+    return httpx2.Response(
+        200, content=out.getvalue(), headers={"content-type": "image/png"}
+    )
+
+
+def _widget_response(widget: dict) -> httpx2.Response:
+    return httpx2.Response(200, json={"value": widget})
+
+
+class TestFetchImage:
+    async def test_fetches_only_the_one_widget_then_its_image(self, make_service):
+        service, transport = make_service(
+            responses=[_widget_response(mural.image("img-1")), _png_response()]
+        )
+
+        label, image = await service.fetch_image(
+            "user-123", "mural-abc", "img-1", "preview"
+        )
+
+        urls = [str(r.url) for r in transport.requests]
+        assert (
+            urls[0]
+            == "https://app.mural.co/api/public/v1/murals/mural-abc/widgets/img-1"
+        )
+        assert urls[1].startswith("https://assets.example.com/img.png")
+        assert transport.requests[0].headers["authorization"] == "Bearer valid-token"
+        assert "authorization" not in transport.requests[1].headers
+        assert image.format == "png"
+        assert label.startswith('<Image id="img-1"')
+        assert "sig=" not in label
+
+    async def test_accepts_a_widget_that_is_not_wrapped_in_value(self, make_service):
+        service, _ = make_service(
+            responses=[httpx2.Response(200, json=mural.image("img-1")), _png_response()]
+        )
+        _, image = await service.fetch_image("u", "m", "img-1", "preview")
+        assert image.data
+
+    async def test_crops_to_the_boards_mask(self, make_service):
+        mask = {"top": 0, "left": 0, "width": 100, "height": 100}
+        service, _ = make_service(
+            responses=[
+                _widget_response(mural.image("img-1", mask=mask)),
+                _png_response(),
+            ]
+        )
+        _, image = await service.fetch_image("u", "m", "img-1", "preview")
+        assert Image.open(io.BytesIO(image.data)).size == (100, 100)
+
+    async def test_a_restricted_board_is_refused_without_downloading(
+        self, make_service
+    ):
+        service, transport = make_service(
+            responses=[_widget_response(mural.image("img-1", url=None))]
+        )
+        with pytest.raises(board_exceptions.ImageRestrictedError):
+            await service.fetch_image("u", "m", "img-1", "preview")
+        assert len(transport.requests) == 1
+
+    async def test_a_second_call_for_an_unedited_image_does_not_download_again(
+        self, make_service
+    ):
+        widget = _widget_response(mural.image("img-1"))
+        service, transport = make_service(
+            responses=[widget, _png_response(), _widget_response(mural.image("img-1"))]
+        )
+        await service.fetch_image("u", "m", "img-1", "preview")
+        await service.fetch_image("u", "m", "img-1", "preview")
+        assert len(transport.requests) == 3
+
+    async def test_a_missing_widget_is_not_found(self, make_service):
+        service, _ = make_service(responses=[httpx2.Response(404)])
+        with pytest.raises(board_exceptions.WidgetNotFoundError, match="img-9"):
+            await service.fetch_image("u", "m", "img-9", "preview")
+
+    async def test_other_api_failures_are_passed_through(self, make_service):
+        service, _ = make_service(responses=[httpx2.Response(500)])
+        with pytest.raises(exceptions.MuralApiError):
+            await service.fetch_image("u", "m", "img-1", "preview")
+
+    async def test_a_widget_that_is_not_an_image_is_refused(self, make_service):
+        service, transport = make_service(
+            responses=[_widget_response(mural.sticky("s1", text="hi"))]
+        )
+        with pytest.raises(board_exceptions.WidgetNotAnImageError):
+            await service.fetch_image("u", "m", "s1", "preview")
+        assert len(transport.requests) == 1
+
+    async def test_a_file_is_shown_by_its_preview(self, make_service):
+        file_widget = mural.file_widget(
+            "f1", previewUrl="https://assets.example.com/preview.png"
+        )
+        service, transport = make_service(
+            responses=[_widget_response(file_widget), _png_response()]
+        )
+        label, _ = await service.fetch_image("u", "m", "f1", "preview")
+        assert (
+            str(transport.requests[1].url) == "https://assets.example.com/preview.png"
+        )
+        assert label.startswith('<File id="f1"')
+
+    async def test_a_file_without_a_preview_is_unavailable(self, make_service):
+        service, _ = make_service(responses=[_widget_response(mural.file_widget("f1"))])
+        with pytest.raises(board_exceptions.ImageNotAvailableError, match="no preview"):
+            await service.fetch_image("u", "m", "f1", "preview")
+
+    async def test_a_restricted_file_does_not_reveal_its_preview(self, make_service):
+        file_widget = mural.file_widget(
+            "f1", url=None, previewUrl="https://assets.example.com/preview.png"
+        )
+        service, transport = make_service(responses=[_widget_response(file_widget)])
+        with pytest.raises(board_exceptions.ImageRestrictedError):
+            await service.fetch_image("u", "m", "f1", "preview")
+        assert len(transport.requests) == 1
+
+    async def test_an_image_on_another_host_is_refused(self, make_service):
+        widget = mural.image("img-1", url="https://evil.test/x.png")
+        service, transport = make_service(responses=[_widget_response(widget)])
+        with pytest.raises(board_exceptions.ImageHostNotAllowedError):
+            await service.fetch_image("u", "m", "img-1", "preview")
+        assert len(transport.requests) == 1
+
+    async def test_a_hidden_image_still_gets_a_label(self, make_service):
+        service, _ = make_service(
+            responses=[
+                _widget_response(mural.image("img-1", hidden=True)),
+                _png_response(),
+            ]
+        )
+        label, _ = await service.fetch_image("u", "m", "img-1", "preview")
+        assert label.startswith('<Image id="img-1"')
