@@ -16,7 +16,7 @@ _EXPECTED_SCHEMAS = {
     "get_board_summary": {"mural_id", "use_spatial_grouping"},
     "get_region": {"mural_id", "region_id", "use_spatial_grouping", "offset"},
     "get_connections": {"mural_id", "widget_id"},
-    "find_widgets": {"mural_id", "query", "widget_type", "offset"},
+    "find_widgets": {"mural_id", "query", "widget_type", "region_id", "offset"},
     "get_image": {"mural_id", "widget_id", "size"},
 }
 
@@ -92,3 +92,31 @@ class TestOutputSchema:
             offset = tools["get_region"].input_schema["properties"]["offset"]
 
             assert offset["minimum"] == 0
+
+
+class TestAnnotations:
+    @pytest.mark.parametrize("tool_name", sorted(_EXPECTED_SCHEMAS))
+    async def test_every_tool_is_marked_read_only_with_a_title(self, tool_name):
+        async with mcp_registry_client() as client:
+            tools = {t.name: t for t in await client.list_tools()}
+
+            tool = tools[tool_name]
+
+            assert tool.annotations is not None
+            assert tool.annotations.read_only_hint is True
+            assert tool.title
+
+
+class TestWidgetTypeChoices:
+    async def test_find_widgets_lists_the_widget_types_it_accepts(self):
+        async with mcp_registry_client() as client:
+            tools = {t.name: t for t in await client.list_tools()}
+
+            prop = tools["find_widgets"].input_schema["properties"]["widget_type"]
+            choices = {
+                value
+                for option in prop.get("anyOf", [prop])
+                for value in option.get("enum", [])
+            }
+
+            assert {"sticky note", "image", "area", "table cell"} <= choices

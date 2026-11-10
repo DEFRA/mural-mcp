@@ -50,12 +50,12 @@ Local development uses a single root `.env` file, loaded by both `compose.yaml` 
 
 ## MCP Tools
 
-The server exposes five tools to AI agents, resolved against the current `Principal` (see [Auth](#auth) — no `user_id` parameter is passed explicitly):
+The server exposes five read-only tools (each is annotated with `readOnlyHint` and a title, so clients can treat them as safe) to AI agents, resolved against the current `Principal` (see [Auth](#auth) — no `user_id` parameter is passed explicitly):
 
 - **`get_board_summary(mural_id, use_spatial_grouping=False)`** — Returns a compact MSX summary of the board's top-level regions, with labels, widget counts, and bounds.
 - **`get_region(mural_id, region_id, use_spatial_grouping=False, offset=0)`** — Returns MSX for the widgets within a board region (an area, or a spatial group when `use_spatial_grouping=True`). An area is fetched on its own with its contents (`parentId`), not the whole board.
 - **`get_connections(mural_id, widget_id)`** — Returns all arrows connected to a widget and their resolved endpoints.
-- **`find_widgets(mural_id, query=None, widget_type=None, offset=0)`** — Searches board widgets by text content and/or widget type; at least one of `query`/`widget_type` is required. A type the Mural API can filter on (everything except `area` and tables) is fetched on its own, not the whole board.
+- **`find_widgets(mural_id, query=None, widget_type=None, region_id=None, offset=0)`** — Searches board widgets by text content and/or widget type; at least one of `query`/`widget_type` is required, and `widget_type` must be one of the listed widget types. `region_id` limits the search to one region, fetched the same way as `get_region`. Without it, a type the Mural API can filter on (everything except `area` and tables) is fetched on its own, not the whole board.
 
 `get_region` and `find_widgets` cap their output at about 60k characters, cut at a whole widget, so a large result is never silently truncated by the client. Their result has two text blocks, plus the same paging object as `structuredContent` (matching the tool's output schema):
 

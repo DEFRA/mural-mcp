@@ -13,11 +13,10 @@ class ForbiddenBoardError(Exception):
 class BoardGuard(abc.ABC):
     """Governance seam: decide whether a user may access a given board.
 
-    Every public BoardService method calls this before its first vendor call:
-    through _load for full-board reads, and directly where a method makes
-    targeted fetches (fetch_region on an area, search_widgets by type,
-    fetch_image). tests/unit/integration/mural/test_service.py's
-    TestGuardEnforcement covers each path.
+    Every public BoardService method starts with BoardService._authorise,
+    which calls this before any vendor call, so they are all gated from a
+    single choke point. tests/unit/integration/mural/test_service.py's
+    TestGuardEnforcement covers each method.
     """
 
     @abc.abstractmethod

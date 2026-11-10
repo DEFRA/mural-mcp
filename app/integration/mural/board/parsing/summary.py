@@ -17,7 +17,7 @@ class BoardSummary:
     def build(cls, tree: models.WidgetTree, mural_id: str) -> "BoardSummary":
         regions: list[models.RegionNode] = []
 
-        for root_id in tree.adjacency.get(None, []):
+        for root_id in tree.shown_child_ids(None):
             node = tree.resolve(root_id)
 
             if isinstance(node, widget_schemas.AreaWidget):
@@ -25,7 +25,7 @@ class BoardSummary:
                     models.RegionNode(
                         id=root_id,
                         label=node.title or "",
-                        count=cls._count_descendants(tree, root_id),
+                        count=tree.count_shown_descendants(root_id),
                         x=node.x,
                         y=node.y,
                         width=node.width,
@@ -33,7 +33,7 @@ class BoardSummary:
                     )
                 )
             elif isinstance(node, models.SpatialGroupNode):
-                child_ids = tree.adjacency.get(root_id, [])
+                child_ids = tree.shown_child_ids(root_id)
                 raw_children = [
                     tree.resolve(cid) for cid in child_ids if cid in tree.nodes
                 ]
@@ -60,13 +60,6 @@ class BoardSummary:
         return cls(root=models.BoardSummaryNode(id=mural_id), regions=regions)
 
     @staticmethod
-    def _count_descendants(tree: models.WidgetTree, node_id: str) -> int:
-        child_ids = tree.adjacency.get(node_id, [])
-        return len(child_ids) + sum(
-            BoardSummary._count_descendants(tree, cid) for cid in child_ids
-        )
-
-    @staticmethod
     def _region_bounds(
         children: Sequence[widget_schemas.Widget],
     ) -> tuple[float, float, float, float]:
@@ -78,8 +71,7 @@ class BoardSummary:
 
     @staticmethod
     def _infer_label(tree: models.WidgetTree, node_id: str) -> str:
-        child_ids = tree.adjacency.get(node_id, [])
-        children = [tree.resolve(cid) for cid in child_ids]
+        children = [tree.resolve(cid) for cid in tree.shown_child_ids(node_id)]
         for child in children:
             if (
                 isinstance(
