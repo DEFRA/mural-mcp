@@ -1,6 +1,6 @@
 services:
   mongodb:
-    image: mongo:6.0.13
+    image: mongo:9.0.4
     networks:
       - cdp-tenant
     ports:
