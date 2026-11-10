@@ -46,7 +46,7 @@ class TestSearchWidgets:
                 ),
             )
 
-            msx_output = await service.search_widgets(
+            msx_output, _page = await service.search_widgets(
                 "user-123", "test-mural-id", None, None
             )
 

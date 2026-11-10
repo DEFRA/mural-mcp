@@ -14,9 +14,9 @@ from tests.support.app import mcp_registry_client
 
 _EXPECTED_SCHEMAS = {
     "get_board_summary": {"mural_id", "use_spatial_grouping"},
-    "get_region": {"mural_id", "region_id", "use_spatial_grouping"},
+    "get_region": {"mural_id", "region_id", "use_spatial_grouping", "offset"},
     "get_connections": {"mural_id", "widget_id"},
-    "find_widgets": {"mural_id", "query", "widget_type"},
+    "find_widgets": {"mural_id", "query", "widget_type", "offset"},
     "get_image": {"mural_id", "widget_id", "size"},
 }
 
@@ -70,3 +70,25 @@ class TestToolSchema:
 
             assert tools[tool_name].description
             assert tools[tool_name].description.strip() != ""
+
+
+class TestOutputSchema:
+    @pytest.mark.parametrize("tool_name", ["get_region", "find_widgets"])
+    async def test_paged_tools_declare_the_paging_schema(self, tool_name):
+        async with mcp_registry_client() as client:
+            tools = {t.name: t for t in await client.list_tools()}
+
+            schema = tools[tool_name].output_schema
+
+            assert schema is not None
+            assert {"shown", "total", "offset", "next_offset"} <= set(
+                schema["properties"]
+            )
+
+    async def test_offset_cannot_be_negative(self):
+        async with mcp_registry_client() as client:
+            tools = {t.name: t for t in await client.list_tools()}
+
+            offset = tools["get_region"].input_schema["properties"]["offset"]
+
+            assert offset["minimum"] == 0

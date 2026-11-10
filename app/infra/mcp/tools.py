@@ -1,10 +1,13 @@
 from collections.abc import Awaitable
-from typing import Literal
+from typing import Annotated, Literal
 
 import dishka
 import fastmcp
+import pydantic
 from fastmcp.exceptions import ToolError
+from fastmcp.tools import ToolResult
 from fastmcp.utilities import types as mcp_types
+from mcp_types import TextContent
 
 from app.auth import principal as principal_module
 from app.infra.mcp import dishka_inject
@@ -13,6 +16,7 @@ from app.integration.mural import guard as guard_module
 from app.integration.mural import service as board_service_module
 from app.integration.mural.board import errors as board_exceptions
 from app.integration.mural.board.parsing import errors as parse_exceptions
+from app.integration.mural.board.rendering import paging
 
 
 def _mural_token_error() -> ToolError:
@@ -64,6 +68,29 @@ async def _call[T](work: Awaitable[T]) -> T:
         raise ToolError(str(err)) from err
 
 
+type Offset = Annotated[
+    int,
+    pydantic.Field(
+        ge=0, description="Where to continue from: the next_offset of a previous call."
+    ),
+]
+
+
+def _paged_result(msx: str, page: paging.Page) -> ToolResult:
+    """MSX first, then the paging object as its own block.
+
+    The paging object goes in structured_content for clients that read it, and
+    as text too, because not every client shows structured content to the model.
+    """
+    return ToolResult(
+        content=[
+            TextContent(type="text", text=msx),
+            TextContent(type="text", text=page.model_dump_json()),
+        ],
+        structured_content=page.model_dump(),
+    )
+
+
 @dishka_inject.inject
 async def get_board_summary(
     mural_id: str,
@@ -86,14 +113,21 @@ async def get_region(
     board: dishka.FromDishka[board_service_module.BoardService],
     principal: dishka.FromDishka[principal_module.Principal],
     use_spatial_grouping: bool = False,
-) -> str:
-    """Return full MSX for all widgets within a board region (area or spatial group).
+    offset: Offset = 0,
+) -> ToolResult:
+    """Return MSX for the widgets within a board region (area or spatial group).
 
+    The second block of the result says which part of the region this is. If
+    its next_offset is not null, the region was too large for one response:
+    call again with offset=next_offset, or open one of its child_regions.
     Image widgets can be viewed with get_image.
     """
-    return await _call(
-        board.fetch_region(principal.user_id, mural_id, region_id, use_spatial_grouping)
+    msx, page = await _call(
+        board.fetch_region(
+            principal.user_id, mural_id, region_id, use_spatial_grouping, offset
+        )
     )
+    return _paged_result(msx, page)
 
 
 @dishka_inject.inject
@@ -116,18 +150,23 @@ async def find_widgets(
     principal: dishka.FromDishka[principal_module.Principal],
     query: str | None = None,
     widget_type: str | None = None,
-) -> str:
+    offset: Offset = 0,
+) -> ToolResult:
     """Search board widgets by text content and/or widget type.
 
-    At least one of query or widget_type must be provided. Image widgets can be
-    viewed with get_image.
+    At least one of query or widget_type must be provided. The second block of
+    the result says which matches this is; if its next_offset is not null, call
+    again with offset=next_offset for the rest. Image widgets can be viewed with
+    get_image.
     """
     if not query and not widget_type:
-        return "Provide at least one of: query, widget_type."
+        empty = paging.Page(shown=0, total=0, offset=0, next_offset=None)
+        return _paged_result("Provide at least one of: query, widget_type.", empty)
 
-    return await _call(
-        board.search_widgets(principal.user_id, mural_id, query, widget_type)
+    msx, page = await _call(
+        board.search_widgets(principal.user_id, mural_id, query, widget_type, offset)
     )
+    return _paged_result(msx, page)
 
 
 @dishka_inject.inject
@@ -153,7 +192,7 @@ async def get_image(
 
 def register_tools(mcp_app: fastmcp.FastMCP) -> None:
     mcp_app.tool()(get_board_summary)
-    mcp_app.tool()(get_region)
+    mcp_app.tool(output_schema=paging.PAGE_OUTPUT_SCHEMA)(get_region)
     mcp_app.tool()(get_connections)
-    mcp_app.tool()(find_widgets)
+    mcp_app.tool(output_schema=paging.PAGE_OUTPUT_SCHEMA)(find_widgets)
     mcp_app.tool()(get_image)

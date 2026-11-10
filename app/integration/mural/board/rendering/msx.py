@@ -1,9 +1,9 @@
 import html
-from collections.abc import Iterable
+from collections.abc import Sequence
 
 from app.integration.mural.board.parsing import models, parser
 from app.integration.mural.board.parsing import schemas as widget_schemas
-from app.integration.mural.board.rendering import registry
+from app.integration.mural.board.rendering import paging, registry
 
 _INDENT = "  "
 
@@ -14,7 +14,7 @@ def format_attrs(attrs: dict[str, str]) -> str:
     return "".join(f' {k}="{html.escape(v, quote=True)}"' for k, v in attrs.items())
 
 
-def _is_shown(node: models.AnyNode) -> bool:
+def is_shown(node: models.AnyNode) -> bool:
     """Hidden and invisible widgets are not on the board as people see it."""
     return not (getattr(node, "hidden", False) or getattr(node, "invisible", False))
 
@@ -45,13 +45,13 @@ def _render_node(
     force: bool = False,
 ) -> list[str]:
     node = tree.resolve(node_id)
-    if not force and not _is_shown(node):
+    if not force and not is_shown(node):
         return []
     tag = reg.get_tag_name(node)
     attr_str = format_attrs(reg.get_attrs(node))
 
     child_ids = [
-        cid for cid in tree.adjacency.get(node_id, []) if _is_shown(tree.resolve(cid))
+        cid for cid in tree.adjacency.get(node_id, []) if is_shown(tree.resolve(cid))
     ]
     content = reg.get_content(node)
     prefix = _INDENT * indent
@@ -70,6 +70,11 @@ def _render_node(
         lines = [f"{prefix}<{tag}{attr_str}/>"]
 
     return lines
+
+
+def _count_descendants(tree: models.WidgetTree, node_id: str) -> int:
+    child_ids = tree.adjacency.get(node_id, [])
+    return len(child_ids) + sum(_count_descendants(tree, cid) for cid in child_ids)
 
 
 def _connection(
@@ -93,6 +98,55 @@ class WidgetMsxRenderer:
     def render_subtree(self, tree: models.WidgetTree, root_id: str) -> str:
         return render_subtree(tree, root_id, self._reg)
 
+    def render_region_page(
+        self,
+        tree: models.WidgetTree,
+        region_id: str,
+        *,
+        offset: int = 0,
+        budget: int = paging.MSX_OUTPUT_BUDGET,
+    ) -> tuple[str, paging.Page]:
+        """MSX for part of a region: its tag wrapping a run of its direct children.
+
+        Every part repeats the region's own tag, so each one is well-formed
+        and says where its widgets sit.
+        """
+        child_ids = [
+            cid
+            for cid in tree.adjacency.get(region_id, [])
+            if is_shown(tree.resolve(cid))
+        ]
+        chunks, page = paging.paginate(
+            child_ids,
+            lambda cid: "\n".join(_render_node(cid, tree, self._reg, indent=1)),
+            offset=offset,
+            budget=budget,
+        )
+        page.child_regions = [
+            paging.ChildRegion(
+                id=cid, title=node.title, count=_count_descendants(tree, cid)
+            )
+            for cid in child_ids
+            if isinstance(node := tree.resolve(cid), widget_schemas.AreaWidget)
+        ]
+
+        node = tree.resolve(region_id)
+        tag = self._reg.get_tag_name(node)
+        attr_str = format_attrs(self._reg.get_attrs(node))
+        if not child_ids:
+            return render_subtree(tree, region_id, self._reg), page
+
+        lines = [f"<{tag}{attr_str}>"]
+        content = self._reg.get_content(node)
+        if content:
+            lines += [
+                f"{_INDENT}{line}"
+                for line in html.escape(content, quote=False).splitlines()
+            ]
+        lines += chunks
+        lines.append(f"</{tag}>")
+        return "\n".join(lines), page
+
     def render_widget(self, widget: models.AnyWidget) -> str:
         """MSX for one widget on its own, shown even if hidden on the board."""
         lines = _render_node(
@@ -100,11 +154,22 @@ class WidgetMsxRenderer:
         )
         return "\n".join(lines)
 
-    def render_widgets(self, widget_ids: Iterable[str], tree: models.WidgetTree) -> str:
-        lines: list[str] = []
-        for widget_id in widget_ids:
-            lines += _render_node(widget_id, tree, self._reg, indent=0)
-        return "\n".join(lines)
+    def render_widgets(
+        self,
+        widget_ids: Sequence[str],
+        tree: models.WidgetTree,
+        *,
+        offset: int = 0,
+        budget: int = paging.MSX_OUTPUT_BUDGET,
+    ) -> tuple[str, paging.Page]:
+        """MSX for a run of the given widgets, each rendered with its subtree."""
+        chunks, page = paging.paginate(
+            widget_ids,
+            lambda wid: "\n".join(_render_node(wid, tree, self._reg, indent=0)),
+            offset=offset,
+            budget=budget,
+        )
+        return "\n".join(chunks), page
 
     def render_connections(
         self,
