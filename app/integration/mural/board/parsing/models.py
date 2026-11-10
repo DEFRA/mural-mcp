@@ -70,6 +70,11 @@ class SpatialGroupNode:
 AnyNode = AnyWidget | TableRowNode | TableColumnNode | SpatialGroupNode
 
 
+def is_shown(node: AnyNode) -> bool:
+    """Hidden and invisible widgets are not on the board as people see it."""
+    return not (getattr(node, "hidden", False) or getattr(node, "invisible", False))
+
+
 @dataclasses.dataclass(frozen=True)
 class WidgetTree:
     """Mural widget tree backed by an adjacency list.
@@ -100,6 +105,29 @@ class WidgetTree:
 
     def children(self, node_id: str | None) -> list[AnyNode]:
         return [self.resolve(cid) for cid in self.adjacency.get(node_id, [])]
+
+    def shown_child_ids(self, node_id: str | None) -> list[str]:
+        return [
+            cid
+            for cid in self.adjacency.get(node_id, [])
+            if is_shown(self.resolve(cid))
+        ]
+
+    def count_shown_descendants(self, node_id: str) -> int:
+        """Nodes under node_id that are rendered: a hidden node hides its subtree."""
+        child_ids = self.shown_child_ids(node_id)
+        return len(child_ids) + sum(
+            self.count_shown_descendants(cid) for cid in child_ids
+        )
+
+    def shown_descendant_widgets(self, node_id: str) -> list[AnyWidget]:
+        """Shown widgets under node_id, depth first in render order."""
+        found: list[AnyWidget] = []
+        for cid in self.shown_child_ids(node_id):
+            if cid in self.nodes:
+                found.append(self.nodes[cid])
+            found += self.shown_descendant_widgets(cid)
+        return found
 
     def __str__(self) -> str:
         lines: list[str] = ["<root>"]

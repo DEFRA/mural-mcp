@@ -127,6 +127,45 @@ class TestBuild:
 
         assert summary.regions[0].count == 2
 
+    def test_hidden_widgets_are_not_counted(self) -> None:
+        parsed = parser.parse_widgets(
+            [
+                _area("area-1", "Sprint Planning"),
+                _sticky("s1", text="a", parent_id="area-1"),
+                {**_sticky("s2", text="b", parent_id="area-1"), "hidden": True},
+                {**_sticky("s3", text="c", parent_id="area-1"), "invisible": True},
+            ]
+        )
+        tree = parser.build_tree(parsed)
+
+        summary = summary_builder.BoardSummary.build(tree, "mural-abc")
+
+        assert summary.regions[0].count == 1
+
+    def test_a_hidden_area_hides_what_is_inside_it(self) -> None:
+        parsed = parser.parse_widgets(
+            [
+                _area("area-1", "Outer"),
+                {**_area("area-2", "Inner"), "parentId": "area-1", "hidden": True},
+                _sticky("s1", text="a", parent_id="area-2"),
+            ]
+        )
+        tree = parser.build_tree(parsed)
+
+        summary = summary_builder.BoardSummary.build(tree, "mural-abc")
+
+        assert summary.regions[0].count == 0
+
+    def test_a_hidden_area_is_not_a_region(self) -> None:
+        parsed = parser.parse_widgets(
+            [{**_area("area-1", "Secret"), "hidden": True}, _area("area-2", "Open")]
+        )
+        tree = parser.build_tree(parsed)
+
+        summary = summary_builder.BoardSummary.build(tree, "mural-abc")
+
+        assert [r.id for r in summary.regions] == ["area-2"]
+
     def test_ungrouped_widgets_produce_no_regions(self) -> None:
         """Loose sticky notes at the top level (no area, no spatial
         grouping) are not regions -- only AreaWidget and SpatialGroupNode

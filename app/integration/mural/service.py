@@ -79,8 +79,7 @@ class BoardService:
 
         Fetches just this widget, so the signed URL it carries is fresh.
         """
-        await self._guard.check(user_id, mural_id)
-        access_token = await self._oauth.get_valid_token(user_id)
+        access_token = await self._authorise(user_id, mural_id)
         widget = await self._fetch_widget(mural_id, widget_id, access_token)
 
         url, mask = self._image_source(widget)
@@ -118,14 +117,29 @@ class BoardService:
             raise board_exceptions.ImageRestrictedError(msg)
         return url, mask
 
+    async def _authorise(self, user_id: str, mural_id: str) -> str:
+        """Check board access, then return the user's Mural token.
+
+        Every public method starts here, before any call to Mural.
+        """
+        await self._guard.check(user_id, mural_id)
+        return await self._oauth.get_valid_token(user_id)
+
     async def _load(
         self,
         user_id: str,
         mural_id: str,
         strategy: strategy_base.GroupingStrategy | None = None,
     ) -> tuple[list[nodes.AnyWidget], nodes.WidgetTree]:
-        await self._guard.check(user_id, mural_id)
-        access_token = await self._oauth.get_valid_token(user_id)
+        access_token = await self._authorise(user_id, mural_id)
+        return await self._load_board(mural_id, access_token, strategy)
+
+    async def _load_board(
+        self,
+        mural_id: str,
+        access_token: str,
+        strategy: strategy_base.GroupingStrategy | None = None,
+    ) -> tuple[list[nodes.AnyWidget], nodes.WidgetTree]:
         raw = await self._fetch_widgets(mural_id, access_token)
         return parser.parse_board(raw, strategy)
 
@@ -148,15 +162,30 @@ class BoardService:
         use_spatial_grouping: bool = False,
         offset: int = 0,
     ) -> tuple[str, paging.Page]:
-        """Return MSX for part of a region, and which part it is.
+        """Return MSX for part of a region, and which part it is."""
+        access_token = await self._authorise(user_id, mural_id)
+        tree = await self._load_region(
+            mural_id, region_id, access_token, use_spatial_grouping
+        )
+        return self._renderer.render_region_page(tree, region_id, offset=offset)
+
+    async def _load_region(
+        self,
+        mural_id: str,
+        region_id: str,
+        access_token: str,
+        use_spatial_grouping: bool = False,
+    ) -> nodes.WidgetTree:
+        """A tree that contains region_id and everything inside it.
 
         An area is fetched on its own with its descendants; anything else
         (spatial groups, table parts) needs the whole board.
+
+        Raises:
+            BoardRegionNotFoundError: if the region is not on the board.
         """
         tree = None
         if not use_spatial_grouping:
-            await self._guard.check(user_id, mural_id)
-            access_token = await self._oauth.get_valid_token(user_id)
             tree = await self._load_area(mural_id, region_id, access_token)
 
         if tree is None:
@@ -165,15 +194,14 @@ class BoardService:
                 if use_spatial_grouping
                 else None
             )
-            _, tree = await self._load(user_id, mural_id, strategy)
+            _, tree = await self._load_board(mural_id, access_token, strategy)
 
         try:
             tree.resolve(region_id)
         except KeyError as exc:
             msg = f'Region "{region_id}" not found on board {mural_id}.'
             raise board_exceptions.BoardRegionNotFoundError(msg) from exc
-
-        return self._renderer.render_region_page(tree, region_id, offset=offset)
+        return tree
 
     async def _load_area(
         self, mural_id: str, area_id: str, access_token: str
@@ -226,29 +254,34 @@ class BoardService:
         query: str | None,
         widget_type: str | None,
         offset: int = 0,
+        region_id: str | None = None,
     ) -> tuple[str, paging.Page]:
         """Return MSX for part of the widgets matching query and/or type.
 
-        A type the API can filter on is fetched on its own instead of the
+        With region_id, only widgets inside that region are searched. Otherwise
+        a type the API can filter on is fetched on its own instead of the
         whole board.
         """
+        access_token = await self._authorise(user_id, mural_id)
         type_filter = _TYPE_FILTERS.get(widget_type) if widget_type else None
-        if type_filter:
-            await self._guard.check(user_id, mural_id)
-            access_token = await self._oauth.get_valid_token(user_id)
+
+        if region_id:
+            tree = await self._load_region(mural_id, region_id, access_token)
+            candidates = tree.shown_descendant_widgets(region_id)
+        elif type_filter:
             raw = await self._fetch_widgets(mural_id, access_token, types=[type_filter])
-            parsed = parser.parse_widgets(raw)
-            tree = parser.build_tree(parsed)
+            candidates = parser.parse_widgets(raw)
+            tree = parser.build_tree(candidates)
         else:
-            parsed, tree = await self._load(user_id, mural_id)
+            candidates, tree = await self._load_board(mural_id, access_token)
 
         needle = query.lower() if query else None
         matches: list[str] = []
 
-        for widget in parsed:
+        for widget in candidates:
             if widget_type and widget.type != widget_type:
                 continue
-            if not msx_renderer.is_shown(widget):
+            if not nodes.is_shown(widget):
                 continue
             if needle:
                 fields = _widget_text_fields(widget)

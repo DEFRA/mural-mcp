@@ -350,3 +350,20 @@ class TestPagedOutput:
             )
 
         assert result.is_error
+
+
+class TestFindWidgetsArguments:
+    async def test_an_unknown_widget_type_is_rejected_before_any_fetch(self):
+        async with mcp_client(mural_token="mural-tok", responses=[]) as (
+            client,
+            overrides,
+            _user_id,
+        ):
+            result = await client.call_tool(
+                "find_widgets",
+                {"mural_id": "mural-abc", "widget_type": "sticky"},
+                raise_on_error=False,
+            )
+
+        assert result.is_error
+        assert overrides.transport.requests == []

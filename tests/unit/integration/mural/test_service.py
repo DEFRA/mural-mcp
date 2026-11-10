@@ -302,6 +302,24 @@ def _widgets(*widgets: dict, next_token: str | None = None) -> httpx2.Response:
     return httpx2.Response(200, json={"value": list(widgets), "next": next_token})
 
 
+class TestAccessIsCheckedOnce:
+    async def test_a_region_that_falls_back_to_the_whole_board(self, make_service):
+        calls: list[str] = []
+
+        class CountingGuard(guard_module.BoardGuard):
+            async def check(self, user_id: str, board_id: str) -> None:
+                calls.append(f"{user_id}:{board_id}")
+
+        service, _ = make_service(
+            responses=[httpx2.Response(404), _widgets(_sticky("sn1"))],
+            guard=CountingGuard(),
+        )
+
+        await service.fetch_region("user-123", "mural-abc", "sn1")
+
+        assert calls == ["user-123:mural-abc"]
+
+
 class TestFetchRegion:
     async def test_raises_when_no_token(self, make_service):
         service, _ = make_service(responses=[], oauth_token=None)
@@ -571,6 +589,75 @@ class TestSearchWidgets:
         assert result == "No widgets matched."
         assert page.next_offset is None
 
+    async def test_region_scope_searches_only_inside_the_region(self, make_service):
+        area = _area("a1", "Area")
+        inside = _sticky("sn1", text="hello inside", parent_id="a1")
+        service, transport = make_service(
+            responses=[httpx2.Response(200, json={"value": area}), _widgets(inside)]
+        )
+
+        result, page = await service.search_widgets(
+            "user-123", "mural-abc", "hello", None, region_id="a1"
+        )
+
+        assert 'id="sn1"' in result
+        assert page.total == 1
+        assert transport.requests[1].url.params["parentId"] == "a1"
+
+    async def test_region_scope_excludes_widgets_outside_it(self, make_service):
+        area = _area("a1", "Area")
+        inside = _sticky("sn1", text="hello inside", parent_id="a1")
+        outside = _sticky("sn2", text="hello outside")
+        service, _ = make_service(
+            responses=[httpx2.Response(404), _widgets(area, inside, outside)]
+        )
+
+        # A region that is not found as a single widget falls back to the
+        # whole board, which still must not leak matches from outside it.
+        result, _ = await service.search_widgets(
+            "user-123", "mural-abc", "hello", None, region_id="a1"
+        )
+
+        assert 'id="sn1"' in result
+        assert "sn2" not in result
+
+    async def test_region_scope_skips_the_region_itself(self, make_service):
+        area = _area("a1", "hello area")
+        service, _ = make_service(
+            responses=[httpx2.Response(200, json={"value": area}), _widgets()]
+        )
+
+        result, _ = await service.search_widgets(
+            "user-123", "mural-abc", "hello", None, region_id="a1"
+        )
+
+        assert result == "No widgets matched."
+
+    async def test_region_scope_with_a_type_still_filters_by_type(self, make_service):
+        area = _area("a1", "Area")
+        note = _sticky("sn1", text="x", parent_id="a1")
+        arrow = {**_arrow("ar1"), "parentId": "a1"}
+        service, _ = make_service(
+            responses=[
+                httpx2.Response(200, json={"value": area}),
+                _widgets(note, arrow),
+            ]
+        )
+
+        result, _ = await service.search_widgets(
+            "user-123", "mural-abc", None, "sticky note", region_id="a1"
+        )
+
+        assert 'id="sn1"' in result
+        assert "ar1" not in result
+
+    async def test_an_unknown_region_scope_is_not_found(self, make_service):
+        service, _ = make_service(responses=[httpx2.Response(404), _widgets()])
+        with pytest.raises(board_exceptions.BoardRegionNotFoundError):
+            await service.search_widgets(
+                "user-123", "mural-abc", "x", None, region_id="nope"
+            )
+
     async def test_matches_are_paged(self, make_service):
         notes = [_sticky(f"sn{i}", text="match " + "x" * 3000) for i in range(40)]
         service, _ = make_service(responses=[_widgets(*notes)] * 10)
@@ -603,6 +690,9 @@ class TestGuardEnforcement:
             lambda service: service.search_widgets(
                 "user-123", "mural-abc", None, "image"
             ),
+            lambda service: service.search_widgets(
+                "user-123", "mural-abc", "q", None, region_id="a1"
+            ),
             lambda service: service.fetch_image(
                 "user-123", "mural-abc", "widget-1", "preview"
             ),
@@ -613,6 +703,7 @@ class TestGuardEnforcement:
             "fetch_connections",
             "search_widgets",
             "search_widgets_by_type",
+            "search_widgets_in_region",
             "fetch_image",
         ],
     )

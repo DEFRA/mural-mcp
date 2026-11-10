@@ -68,6 +68,20 @@ async def _call[T](work: Awaitable[T]) -> T:
         raise ToolError(str(err)) from err
 
 
+type WidgetType = Literal[
+    "area",
+    "arrow",
+    "comment",
+    "file",
+    "icon",
+    "image",
+    "shape",
+    "sticky note",
+    "table",
+    "table cell",
+    "text",
+]
+
 type Offset = Annotated[
     int,
     pydantic.Field(
@@ -149,12 +163,15 @@ async def find_widgets(
     board: dishka.FromDishka[board_service_module.BoardService],
     principal: dishka.FromDishka[principal_module.Principal],
     query: str | None = None,
-    widget_type: str | None = None,
+    widget_type: WidgetType | None = None,
+    region_id: str | None = None,
     offset: Offset = 0,
 ) -> ToolResult:
     """Search board widgets by text content and/or widget type.
 
-    At least one of query or widget_type must be provided. The second block of
+    At least one of query or widget_type must be provided. Pass region_id (an
+    id from get_board_summary or child_regions) to search only inside that
+    region. The second block of
     the result says which matches this is; if its next_offset is not null, call
     again with offset=next_offset for the rest. Image widgets can be viewed with
     get_image.
@@ -164,7 +181,9 @@ async def find_widgets(
         return _paged_result("Provide at least one of: query, widget_type.", empty)
 
     msx, page = await _call(
-        board.search_widgets(principal.user_id, mural_id, query, widget_type, offset)
+        board.search_widgets(
+            principal.user_id, mural_id, query, widget_type, offset, region_id
+        )
     )
     return _paged_result(msx, page)
 
@@ -190,9 +209,22 @@ async def get_image(
     return [label, mcp_types.Image(data=image.data, format=image.format)]
 
 
+# Every tool only reads the board. Telling the client lets it skip the
+# confirmation prompt it would show for a tool that could change something.
+_READ_ONLY = {"readOnlyHint": True, "openWorldHint": True}
+
+
 def register_tools(mcp_app: fastmcp.FastMCP) -> None:
-    mcp_app.tool()(get_board_summary)
-    mcp_app.tool(output_schema=paging.PAGE_OUTPUT_SCHEMA)(get_region)
-    mcp_app.tool()(get_connections)
-    mcp_app.tool(output_schema=paging.PAGE_OUTPUT_SCHEMA)(find_widgets)
-    mcp_app.tool()(get_image)
+    mcp_app.tool(title="Board summary", annotations=_READ_ONLY)(get_board_summary)
+    mcp_app.tool(
+        title="Board region",
+        annotations=_READ_ONLY,
+        output_schema=paging.PAGE_OUTPUT_SCHEMA,
+    )(get_region)
+    mcp_app.tool(title="Widget connections", annotations=_READ_ONLY)(get_connections)
+    mcp_app.tool(
+        title="Find widgets",
+        annotations=_READ_ONLY,
+        output_schema=paging.PAGE_OUTPUT_SCHEMA,
+    )(find_widgets)
+    mcp_app.tool(title="Board image", annotations=_READ_ONLY)(get_image)

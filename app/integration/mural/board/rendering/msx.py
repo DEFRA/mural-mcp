@@ -14,9 +14,8 @@ def format_attrs(attrs: dict[str, str]) -> str:
     return "".join(f' {k}="{html.escape(v, quote=True)}"' for k, v in attrs.items())
 
 
-def is_shown(node: models.AnyNode) -> bool:
-    """Hidden and invisible widgets are not on the board as people see it."""
-    return not (getattr(node, "hidden", False) or getattr(node, "invisible", False))
+# Re-exported: callers that render also need to know what gets rendered.
+is_shown = models.is_shown
 
 
 def render_subtree(
@@ -50,9 +49,7 @@ def _render_node(
     tag = reg.get_tag_name(node)
     attr_str = format_attrs(reg.get_attrs(node))
 
-    child_ids = [
-        cid for cid in tree.adjacency.get(node_id, []) if is_shown(tree.resolve(cid))
-    ]
+    child_ids = tree.shown_child_ids(node_id)
     content = reg.get_content(node)
     prefix = _INDENT * indent
 
@@ -70,11 +67,6 @@ def _render_node(
         lines = [f"{prefix}<{tag}{attr_str}/>"]
 
     return lines
-
-
-def _count_descendants(tree: models.WidgetTree, node_id: str) -> int:
-    child_ids = tree.adjacency.get(node_id, [])
-    return len(child_ids) + sum(_count_descendants(tree, cid) for cid in child_ids)
 
 
 def _connection(
@@ -111,11 +103,7 @@ class WidgetMsxRenderer:
         Every part repeats the region's own tag, so each one is well-formed
         and says where its widgets sit.
         """
-        child_ids = [
-            cid
-            for cid in tree.adjacency.get(region_id, [])
-            if is_shown(tree.resolve(cid))
-        ]
+        child_ids = tree.shown_child_ids(region_id)
         chunks, page = paging.paginate(
             child_ids,
             lambda cid: "\n".join(_render_node(cid, tree, self._reg, indent=1)),
@@ -124,7 +112,7 @@ class WidgetMsxRenderer:
         )
         page.child_regions = [
             paging.ChildRegion(
-                id=cid, title=node.title, count=_count_descendants(tree, cid)
+                id=cid, title=node.title, count=tree.count_shown_descendants(cid)
             )
             for cid in child_ids
             if isinstance(node := tree.resolve(cid), widget_schemas.AreaWidget)
