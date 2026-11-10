@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 import uuid
 
 from app.integration.mural import exceptions, models, ports
@@ -30,7 +30,7 @@ class BoardAccessRequestService:
             board_id=board_id,
             iao=iao,
             reason=reason,
-            created_at=datetime.datetime.now(datetime.UTC),
+            created_at=dt.datetime.now(dt.UTC),
         )
         await self._store.create(request)
         return request
@@ -57,7 +57,7 @@ class BoardAccessRequestService:
         request.decision_reason = decision_reason
         request.data_handling_form_ref = data_handling_form_ref
         request.risk_assessment_ref = risk_assessment_ref
-        request.decided_at = datetime.datetime.now(datetime.UTC)
+        request.decided_at = dt.datetime.now(dt.UTC)
         await self._store.update(request)
         return request
 
@@ -68,7 +68,7 @@ class BoardAccessRequestService:
         request.status = models.AccessRequestStatus.REJECTED
         request.reviewer_id = reviewer_id
         request.decision_reason = decision_reason
-        request.decided_at = datetime.datetime.now(datetime.UTC)
+        request.decided_at = dt.datetime.now(dt.UTC)
         await self._store.update(request)
         return request
 

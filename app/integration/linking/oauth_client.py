@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 import urllib.parse
 
 import httpx2
@@ -6,7 +6,7 @@ import httpx2
 from app import config as app_config
 from app.integration.linking import exceptions, models, ports
 
-_LEEWAY = datetime.timedelta(seconds=60)
+_LEEWAY = dt.timedelta(seconds=60)
 
 # Fixed by the Mural API, not by deployment.
 _AUTHORIZE_PATH = "/public/v1/authorization/oauth2/"
@@ -64,7 +64,7 @@ class OAuthClient:
     def _to_token(self, data: dict, fallback_refresh_token: str) -> models.MuralToken:  # type: ignore[type-arg]
         expires_in = data.get("expires_in")
         expires_at = (
-            datetime.datetime.now(datetime.UTC) + datetime.timedelta(seconds=expires_in)
+            dt.datetime.now(dt.UTC) + dt.timedelta(seconds=expires_in)
             if expires_in is not None
             else None
         )
@@ -132,7 +132,7 @@ class OAuthClient:
 
         is_expired = (
             token.expires_at is not None
-            and token.expires_at <= datetime.datetime.now(datetime.UTC) + _LEEWAY
+            and token.expires_at <= dt.datetime.now(dt.UTC) + _LEEWAY
         )
         if is_expired:
             token = await self.refresh(token.refresh_token)
