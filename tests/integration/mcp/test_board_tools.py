@@ -6,7 +6,7 @@ MCP client actually sees them: `result.is_error` and the message in
 `result.content[0].text`, not just an exception type on a direct call.
 """
 
-import datetime
+import datetime as dt
 
 import httpx2
 
@@ -134,7 +134,7 @@ class TestErrorEnvelopes:
                     reason="why",
                     iao="owner@x.com",
                     status=models.AccessRequestStatus.APPROVED,
-                    created_at=datetime.datetime.now(datetime.UTC),
+                    created_at=dt.datetime.now(dt.UTC),
                 )
             )
 

@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 import unittest.mock
 
 from pymongo import common as pymongo_common
@@ -6,7 +6,7 @@ from pymongo import common as pymongo_common
 from app.integration.mural import models
 from app.integration.mural import mongo_store as approval_store
 
-_NOW = datetime.datetime(2024, 1, 1, tzinfo=datetime.UTC)
+_NOW = dt.datetime(2024, 1, 1, tzinfo=dt.UTC)
 
 
 def _make_request(**kwargs: object) -> models.BoardAccessRequest:

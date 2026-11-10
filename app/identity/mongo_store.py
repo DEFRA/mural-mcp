@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 
 from pymongo.asynchronous import collection
 
@@ -33,10 +33,10 @@ class MongoPersonalAccessTokenStore(ports.PersonalAccessTokenStore):
     async def revoke(self, token_id: str) -> None:
         await self._collection.update_one(
             {"id": token_id},
-            {"$set": {"revoked_at": datetime.datetime.now(datetime.UTC)}},
+            {"$set": {"revoked_at": dt.datetime.now(dt.UTC)}},
         )
 
-    async def touch_last_used(self, token_id: str, when: datetime.datetime) -> None:
+    async def touch_last_used(self, token_id: str, when: dt.datetime) -> None:
         await self._collection.update_one(
             {"id": token_id}, {"$set": {"last_used_at": when}}
         )

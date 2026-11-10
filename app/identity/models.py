@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 
 import pydantic
 
@@ -15,12 +15,12 @@ class PersonalAccessToken(pydantic.BaseModel):
     token_hash: str
     prefix: str
     label: str
-    created_at: datetime.datetime
-    expires_at: datetime.datetime
-    last_used_at: datetime.datetime | None = None
-    revoked_at: datetime.datetime | None = None
+    created_at: dt.datetime
+    expires_at: dt.datetime
+    last_used_at: dt.datetime | None = None
+    revoked_at: dt.datetime | None = None
 
     @property
     def is_active(self) -> bool:
-        now = datetime.datetime.now(datetime.UTC)
+        now = dt.datetime.now(dt.UTC)
         return self.revoked_at is None and self.expires_at > now

@@ -1,6 +1,6 @@
 """Boundary tests for app/infra/rest/approval_router.py."""
 
-import datetime
+import datetime as dt
 
 from app.integration.mural import models
 from tests.support.app import rest_client, seed
@@ -69,7 +69,7 @@ class TestGettingARequest:
                 board_id="board-abc",
                 reason="need it",
                 iao="owner@defra.gov.uk",
-                created_at=datetime.datetime(2024, 1, 1, tzinfo=datetime.UTC),
+                created_at=dt.datetime(2024, 1, 1, tzinfo=dt.UTC),
             )
             seed(client, overrides.access_requests.create, other_users_request)
 

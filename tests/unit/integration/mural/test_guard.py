@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 
 import pytest
 
@@ -52,7 +52,7 @@ class TestAnyOfBoardGuard:
                 reason="why",
                 iao="owner@x.com",
                 status=models.AccessRequestStatus.APPROVED,
-                created_at=datetime.datetime.now(datetime.UTC),
+                created_at=dt.datetime.now(dt.UTC),
             )
         )
         guard = guard_module.AnyOfBoardGuard(
@@ -90,7 +90,7 @@ class TestApprovedRequestBoardGuard:
                 board_id="board-1",
                 reason="why",
                 iao="owner@x.com",
-                created_at=datetime.datetime.now(datetime.UTC),
+                created_at=dt.datetime.now(dt.UTC),
             )
         )
         guard = guard_module.ApprovedRequestBoardGuard(store)
@@ -108,7 +108,7 @@ class TestApprovedRequestBoardGuard:
                 reason="why",
                 iao="owner@x.com",
                 status=models.AccessRequestStatus.APPROVED,
-                created_at=datetime.datetime.now(datetime.UTC),
+                created_at=dt.datetime.now(dt.UTC),
             )
         )
         guard = guard_module.ApprovedRequestBoardGuard(store)
@@ -125,7 +125,7 @@ class TestApprovedRequestBoardGuard:
                 reason="why",
                 iao="owner@x.com",
                 status=models.AccessRequestStatus.APPROVED,
-                created_at=datetime.datetime.now(datetime.UTC),
+                created_at=dt.datetime.now(dt.UTC),
             )
         )
         guard = guard_module.ApprovedRequestBoardGuard(store)
@@ -143,7 +143,7 @@ class TestApprovedRequestBoardGuard:
                 reason="why",
                 iao="owner@x.com",
                 status=models.AccessRequestStatus.APPROVED,
-                created_at=datetime.datetime.now(datetime.UTC),
+                created_at=dt.datetime.now(dt.UTC),
             )
         )
         guard = guard_module.ApprovedRequestBoardGuard(store)
