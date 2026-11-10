@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 
 import httpx2
 import pytest
@@ -74,7 +74,7 @@ class TestGetValidToken:
             await oauth.get_valid_token("user-123")
 
     async def test_returns_access_token_when_not_expired(self, fake_config):
-        future_exp = datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=1)
+        future_exp = dt.datetime.now(dt.UTC) + dt.timedelta(hours=1)
         token = schemas.MuralToken(
             access_token="example-access-token",
             refresh_token="example-refresh-token",
@@ -101,7 +101,7 @@ class TestGetValidToken:
         assert result == "example-access-token"
 
     async def test_refreshes_and_stores_when_expired(self, fake_config):
-        past_exp = datetime.datetime.now(datetime.UTC) - datetime.timedelta(hours=1)
+        past_exp = dt.datetime.now(dt.UTC) - dt.timedelta(hours=1)
         new_token_data = {
             "access_token": "example-new-access-token",
             "refresh_token": "example-new-refresh-token",

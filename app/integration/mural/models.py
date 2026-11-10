@@ -1,4 +1,4 @@
-import datetime
+import datetime as dt
 import enum
 
 import pydantic
@@ -30,8 +30,8 @@ class BoardAccessRequest(pydantic.BaseModel):
     decision_reason: str | None = None
     data_handling_form_ref: str | None = None
     risk_assessment_ref: str | None = None
-    created_at: datetime.datetime
-    decided_at: datetime.datetime | None = None
+    created_at: dt.datetime
+    decided_at: dt.datetime | None = None
 
     @pydantic.computed_field  # type: ignore[prop-decorator]
     @property
