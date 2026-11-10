@@ -42,7 +42,45 @@ updates:
         patterns:
           - '*'
 
+<<<<<<< Updated upstream
     # Schedule run every Monday, local time
+=======
+    schedule:
+      interval: weekly
+      time: '10:30'
+      timezone: 'Europe/London'
+
+  - package-ecosystem: docker
+    directory: /
+
+    groups:
+      docker:
+        patterns:
+          - '*'
+
+    schedule:
+      interval: daily
+      time: '10:30'
+      timezone: 'Europe/London'
+
+  - package-ecosystem: docker-compose
+    directory: /
+    ignore:
+      # mongo is pinned to major 6 (6.0.13). Allow dependabot to bump within
+      # that major (6.x, 6.0.x, ...) but ignore jumps to any other major.
+      - dependency-name: mongo
+        patterns:
+          - '^[0-57-9][0-9]*(\.[0-9]+)*$'   # first numeric major != 6 -> ignore
+
+    cooldown:
+      default-days: 7
+
+    groups:
+      docker-compose:
+        patterns:
+          - '*'
+
+>>>>>>> Stashed changes
     schedule:
       interval: weekly
       time: '10:30'
