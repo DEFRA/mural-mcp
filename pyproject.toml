@@ -5,21 +5,18 @@ description = "mural-mcp"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "anyio==4.15.1",
+    "authlib==1.9.3",
     "asgi-logger==0.1.0",
     "cryptography==50.0.2",
     "dishka==1.10.1",
     "dnspython==2.9.1",
     "ecs-logging==2.3.0",
     "fastapi==0.162.0",
-    "fastmcp==4.1.4",
-    "idna==3.20",
-    "joserfc==1.7.7",
-    "truststore==0.10.5",
+    "fastmcp==4.1.6",
+    "opentelemetry-api==1.45.2",
     "pydantic-settings==2.16.2",
     "pyjwt==2.15.1",
     "pymongo[aws,encryption,snappy,zstd]==4.19.0",
-    "python-multipart==0.0.32",
     "urllib3==2.8.0",
     "uvicorn==0.54.0",
     "httpx2==2.16.0",
@@ -35,7 +32,7 @@ dev = [
     "ruff==0.17.3",
     "taskipy==1.14.1",
     "testcontainers==4.15.0",
-    "vcrpy==9.2.0",
+    "vcrpy==9.4.2",
 ]
 
 [project.scripts]
