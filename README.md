@@ -53,9 +53,16 @@ Local development uses a single root `.env` file, loaded by both `compose.yaml` 
 The server exposes five tools to AI agents, resolved against the current `Principal` (see [Auth](#auth) — no `user_id` parameter is passed explicitly):
 
 - **`get_board_summary(mural_id, use_spatial_grouping=False)`** — Returns a compact MSX summary of the board's top-level regions, with labels, widget counts, and bounds.
-- **`get_region(mural_id, region_id, use_spatial_grouping=False)`** — Returns full MSX for all widgets within a board region (an area, or a spatial group when `use_spatial_grouping=True`).
+- **`get_region(mural_id, region_id, use_spatial_grouping=False, offset=0)`** — Returns MSX for the widgets within a board region (an area, or a spatial group when `use_spatial_grouping=True`). An area is fetched on its own with its contents (`parentId`), not the whole board.
 - **`get_connections(mural_id, widget_id)`** — Returns all arrows connected to a widget and their resolved endpoints.
-- **`find_widgets(mural_id, query=None, widget_type=None)`** — Searches board widgets by text content and/or widget type; at least one of `query`/`widget_type` is required.
+- **`find_widgets(mural_id, query=None, widget_type=None, offset=0)`** — Searches board widgets by text content and/or widget type; at least one of `query`/`widget_type` is required. A type the Mural API can filter on (everything except `area` and tables) is fetched on its own, not the whole board.
+
+`get_region` and `find_widgets` cap their output at about 60k characters, cut at a whole widget, so a large result is never silently truncated by the client. Their result has two text blocks, plus the same paging object as `structuredContent` (matching the tool's output schema):
+
+1. The MSX for this part.
+2. A paging object, for example `{"shown": 180, "total": 412, "offset": 0, "next_offset": 180, "child_regions": [...]}`. `next_offset` is `null` when the result is complete; otherwise call again with `offset=next_offset`. For `get_region`, `child_regions` lists the areas directly inside the region, with their widget counts, so an agent can drill down instead.
+
+All widget-list requests to Mural use the largest page size the API allows (`limit=99`) and follow every page.
 - **`get_image(mural_id, widget_id, size="preview")`** — Returns one image widget (or the preview of a file widget) as an image the agent can look at, preceded by its MSX label. The image is cropped as shown on the board and resized on the server (`preview` ≈ 1024px, `full` ≈ 1568px on the long edge). Boards with Mural's download restriction turned on are refused. In MSX, an `<Image>` with `viewable="true"` can be loaded this way; `restricted="true"` cannot.
 
 Connecting/disconnecting a Mural account is a frontend concern, not an MCP tool — the frontend drives it via the REST routes under `/connect` (`GET /connect/mural/authorization-url`, `GET /connect/mural/callback`) — see [API endpoints](#api-endpoints).

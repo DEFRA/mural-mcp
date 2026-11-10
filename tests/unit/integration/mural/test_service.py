@@ -1,4 +1,5 @@
 import io
+import re
 
 import httpx2
 import pytest
@@ -297,29 +298,153 @@ class TestResolveNext:
         assert result is None
 
 
+def _widgets(*widgets: dict, next_token: str | None = None) -> httpx2.Response:
+    return httpx2.Response(200, json={"value": list(widgets), "next": next_token})
+
+
 class TestFetchRegion:
     async def test_raises_when_no_token(self, make_service):
         service, _ = make_service(responses=[], oauth_token=None)
         with pytest.raises(exceptions.MuralTokenError):
             await service.fetch_region("user-123", "mural-abc", "a1")
 
-    async def test_unknown_id_raises(self, make_service):
-        service, _ = make_service(responses=[httpx2.Response(200, json={"value": []})])
+    async def test_unknown_id_raises_after_searching_the_whole_board(
+        self, make_service
+    ):
+        service, transport = make_service(responses=[httpx2.Response(404), _widgets()])
         with pytest.raises(
             board_exceptions.BoardRegionNotFoundError, match="no-such-id"
         ):
             await service.fetch_region("user-123", "mural-abc", "no-such-id")
+        assert "parentId" not in transport.requests[1].url.params
 
-    async def test_renders_area_subtree(self, make_service):
+    async def test_an_area_is_fetched_with_its_children_only(self, make_service):
         area = _area("a1", "Design Sprint")
         note = _sticky("sn1", text="Hello", parent_id="a1")
-        service, _ = make_service(
-            responses=[httpx2.Response(200, json={"value": [area, note]})]
+        service, transport = make_service(
+            responses=[httpx2.Response(200, json={"value": area}), _widgets(note)]
         )
-        result = await service.fetch_region("user-123", "mural-abc", "a1")
+
+        result, page = await service.fetch_region("user-123", "mural-abc", "a1")
+
         assert "<Area" in result
         assert "<StickyNote" in result
         assert "Hello" in result
+        assert str(transport.requests[0].url).endswith("/widgets/a1")
+        assert transport.requests[1].url.params["parentId"] == "a1"
+        assert transport.requests[1].url.params["limit"] == "99"
+        assert len(transport.requests) == 2
+        assert (page.shown, page.total, page.next_offset) == (1, 1, None)
+
+    async def test_nested_areas_are_fetched_too(self, make_service):
+        outer = _area("a1", "Outer")
+        inner = {**_area("a2", "Inner"), "parentId": "a1"}
+        deep = _sticky("sn1", text="Deep", parent_id="a2")
+        service, transport = make_service(
+            responses=[
+                httpx2.Response(200, json={"value": outer}),
+                _widgets(inner),
+                _widgets(deep),
+            ]
+        )
+
+        result, page = await service.fetch_region("user-123", "mural-abc", "a1")
+
+        assert "Deep" in result
+        assert [r.url.params.get("parentId") for r in transport.requests[1:]] == [
+            "a1",
+            "a2",
+        ]
+        assert [(c.id, c.count) for c in page.child_regions] == [("a2", 1)]
+
+    async def test_children_are_paged_across_every_api_page(self, make_service):
+        area = _area("a1", "Area")
+        service, transport = make_service(
+            responses=[
+                httpx2.Response(200, json={"value": area}),
+                _widgets(_sticky("sn1", parent_id="a1"), next_token="tok"),
+                _widgets(_sticky("sn2", parent_id="a1")),
+            ]
+        )
+
+        result, _ = await service.fetch_region("user-123", "mural-abc", "a1")
+
+        assert 'id="sn1"' in result
+        assert 'id="sn2"' in result
+        assert transport.requests[2].url.params["next"] == "tok"
+        assert transport.requests[2].url.params["parentId"] == "a1"
+
+    async def test_a_region_that_is_not_an_area_uses_the_whole_board(
+        self, make_service
+    ):
+        note = _sticky("sn1", text="Hello")
+        service, transport = make_service(
+            responses=[httpx2.Response(200, json={"value": note}), _widgets(note)]
+        )
+
+        result, _ = await service.fetch_region("user-123", "mural-abc", "sn1")
+
+        assert "Hello" in result
+        assert "parentId" not in transport.requests[1].url.params
+
+    async def test_an_area_holding_a_table_uses_the_whole_board(self, make_service):
+        area = _area("a1", "Area")
+        table = _base_widget(
+            "t1",
+            "table",
+            parentId="a1",
+            autoResize=False,
+            columns=[],
+            rows=[],
+            style={"borderColor": "#000000FF", "borderWidth": 1},
+        )
+        service, transport = make_service(
+            responses=[
+                httpx2.Response(200, json={"value": area}),
+                _widgets(table),
+                _widgets(area, table),
+            ]
+        )
+
+        await service.fetch_region("user-123", "mural-abc", "a1")
+
+        assert len(transport.requests) == 3
+        assert "parentId" not in transport.requests[2].url.params
+
+    async def test_spatial_grouping_uses_the_whole_board(self, make_service):
+        note = _sticky("sn1", text="Hello")
+        service, transport = make_service(responses=[_widgets(note)])
+
+        await service.fetch_region(
+            "user-123", "mural-abc", "sn1", use_spatial_grouping=True
+        )
+
+        assert len(transport.requests) == 1
+        assert "parentId" not in transport.requests[0].url.params
+
+    async def test_a_large_region_is_split_and_every_part_is_reachable(
+        self, make_service
+    ):
+        area = _area("a1", "Area")
+        notes = [_sticky(f"sn{i}", text="x" * 2000, parent_id="a1") for i in range(80)]
+        responses = []
+        for _ in range(10):
+            responses += [httpx2.Response(200, json={"value": area}), _widgets(*notes)]
+        service, _ = make_service(responses=responses)
+
+        seen: list[str] = []
+        offset: int | None = 0
+        while offset is not None:
+            result, page = await service.fetch_region(
+                "user-123", "mural-abc", "a1", offset=offset
+            )
+            assert len(result) < 70_000
+            assert result.startswith("<Area")
+            assert result.endswith("</Area>")
+            seen += re.findall(r'<StickyNote id="(sn\d+)"', result)
+            offset = page.next_offset
+
+        assert seen == [f"sn{i}" for i in range(80)]
 
 
 class TestFetchConnections:
@@ -369,32 +494,100 @@ class TestSearchWidgets:
     async def test_by_text_returns_matching(self, make_service):
         note1 = _sticky("sn1", text="Hello World")
         note2 = _sticky("sn2", text="Something else")
-        service, _ = make_service(
-            responses=[httpx2.Response(200, json={"value": [note1, note2]})]
+        service, transport = make_service(responses=[_widgets(note1, note2)])
+        result, page = await service.search_widgets(
+            "user-123", "mural-abc", "hello", None
         )
-        result = await service.search_widgets("user-123", "mural-abc", "hello", None)
         assert "sn1" in result
         assert "sn2" not in result
+        assert (page.shown, page.total) == (1, 1)
+        assert "type" not in transport.requests[0].url.params
 
-    async def test_by_type(self, make_service):
+    async def test_a_filterable_type_is_fetched_on_its_own(self, make_service):
         note = _sticky("sn1", text="A sticky")
-        area = _area("a1", "An area")
-        service, _ = make_service(
-            responses=[httpx2.Response(200, json={"value": [note, area]})]
+        service, transport = make_service(responses=[_widgets(note)])
+        result, _ = await service.search_widgets(
+            "user-123", "mural-abc", None, "sticky note"
         )
-        result = await service.search_widgets("user-123", "mural-abc", None, "area")
+        assert "sn1" in result
+        assert transport.requests[0].url.params["type"] == "sticky notes"
+
+    async def test_text_search_within_a_type_uses_the_filter_too(self, make_service):
+        note1 = _sticky("sn1", text="Hello")
+        note2 = _sticky("sn2", text="Bye")
+        service, transport = make_service(responses=[_widgets(note1, note2)])
+        result, _ = await service.search_widgets(
+            "user-123", "mural-abc", "hello", "sticky note"
+        )
+        assert "sn1" in result
+        assert "sn2" not in result
+        assert transport.requests[0].url.params["type"] == "sticky notes"
+
+    async def test_the_type_filter_is_sent_again_with_each_page(self, make_service):
+        service, transport = make_service(
+            responses=[
+                _widgets(_sticky("sn1"), next_token="tok"),
+                _widgets(_sticky("sn2")),
+            ]
+        )
+        await service.search_widgets("user-123", "mural-abc", None, "sticky note")
+        params = transport.requests[1].url.params
+        assert params["next"] == "tok"
+        assert params["type"] == "sticky notes"
+        assert params["limit"] == "99"
+
+    @pytest.mark.parametrize("widget_type", ["area", "table", "table cell"])
+    async def test_types_without_a_safe_filter_use_the_whole_board(
+        self, make_service, widget_type
+    ):
+        area = _area("a1", "An area")
+        service, transport = make_service(responses=[_widgets(area)])
+        await service.search_widgets("user-123", "mural-abc", None, widget_type)
+        assert "type" not in transport.requests[0].url.params
+
+    async def test_an_area_match_includes_its_contents(self, make_service):
+        area = _area("a1", "An area")
+        note = _sticky("sn1", text="Inside", parent_id="a1")
+        service, _ = make_service(responses=[_widgets(area, note)])
+        result, _ = await service.search_widgets("user-123", "mural-abc", None, "area")
         assert "a1" in result
-        assert "sn1" not in result
+        assert "Inside" in result
+
+    async def test_hidden_widgets_are_not_matches(self, make_service):
+        note = {**_sticky("sn1", text="Hello"), "hidden": True}
+        service, _ = make_service(responses=[_widgets(note)])
+        result, page = await service.search_widgets(
+            "user-123", "mural-abc", "hello", None
+        )
+        assert result == "No widgets matched."
+        assert page.total == 0
 
     async def test_no_match_returns_message(self, make_service):
         note = _sticky("sn1", text="Nothing relevant")
-        service, _ = make_service(
-            responses=[httpx2.Response(200, json={"value": [note]})]
-        )
-        result = await service.search_widgets(
+        service, _ = make_service(responses=[_widgets(note)])
+        result, page = await service.search_widgets(
             "user-123", "mural-abc", "xyz-not-found", None
         )
         assert result == "No widgets matched."
+        assert page.next_offset is None
+
+    async def test_matches_are_paged(self, make_service):
+        notes = [_sticky(f"sn{i}", text="match " + "x" * 3000) for i in range(40)]
+        service, _ = make_service(responses=[_widgets(*notes)] * 10)
+
+        seen: list[str] = []
+        pages = 0
+        offset: int | None = 0
+        while offset is not None:
+            result, page = await service.search_widgets(
+                "user-123", "mural-abc", "match", None, offset=offset
+            )
+            seen += re.findall(r'<StickyNote id="(sn\d+)"', result)
+            offset = page.next_offset
+            pages += 1
+
+        assert pages > 1
+        assert seen == [f"sn{i}" for i in range(40)]
 
 
 class TestGuardEnforcement:
@@ -407,6 +600,9 @@ class TestGuardEnforcement:
                 "user-123", "mural-abc", "widget-1"
             ),
             lambda service: service.search_widgets("user-123", "mural-abc", "q", None),
+            lambda service: service.search_widgets(
+                "user-123", "mural-abc", None, "image"
+            ),
             lambda service: service.fetch_image(
                 "user-123", "mural-abc", "widget-1", "preview"
             ),
@@ -416,6 +612,7 @@ class TestGuardEnforcement:
             "fetch_region",
             "fetch_connections",
             "search_widgets",
+            "search_widgets_by_type",
             "fetch_image",
         ],
     )

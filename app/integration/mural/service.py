@@ -14,7 +14,29 @@ from app.integration.mural.board.parsing import schemas as widget_schemas
 from app.integration.mural.board.parsing import spatial as spatial_strategy
 from app.integration.mural.board.parsing import summary as summary_builder
 from app.integration.mural.board.rendering import msx as msx_renderer
+from app.integration.mural.board.rendering import paging
 from app.integration.mural.board.rendering import summary as summary_renderer
+
+# Largest page the widgets endpoint accepts (it must be under 100).
+_PAGE_LIMIT = "99"
+
+# Widget types the API's `type` filter accepts, by the singular name widgets
+# carry. Areas are left out on purpose: an area found by search is rendered
+# with its contents, which a type-filtered fetch would not include. Tables
+# have no filter at all.
+_TYPE_FILTERS = {
+    "arrow": "arrows",
+    "comment": "comments",
+    "file": "files",
+    "icon": "icons",
+    "image": "images",
+    "shape": "shapes",
+    "sticky note": "sticky notes",
+    "text": "texts",
+}
+
+# Nested areas fetched one by one before a full board fetch is cheaper.
+_MAX_AREA_FETCHES = 20
 
 
 def _widget_text_fields(widget: nodes.AnyWidget) -> list[str]:
@@ -124,12 +146,26 @@ class BoardService:
         mural_id: str,
         region_id: str,
         use_spatial_grouping: bool = False,
-    ) -> str:
-        """Return full MSX for the widgets within a board region."""
-        strategy = (
-            spatial_strategy.SpatialGroupingStrategy() if use_spatial_grouping else None
-        )
-        _, tree = await self._load(user_id, mural_id, strategy)
+        offset: int = 0,
+    ) -> tuple[str, paging.Page]:
+        """Return MSX for part of a region, and which part it is.
+
+        An area is fetched on its own with its descendants; anything else
+        (spatial groups, table parts) needs the whole board.
+        """
+        tree = None
+        if not use_spatial_grouping:
+            await self._guard.check(user_id, mural_id)
+            access_token = await self._oauth.get_valid_token(user_id)
+            tree = await self._load_area(mural_id, region_id, access_token)
+
+        if tree is None:
+            strategy = (
+                spatial_strategy.SpatialGroupingStrategy()
+                if use_spatial_grouping
+                else None
+            )
+            _, tree = await self._load(user_id, mural_id, strategy)
 
         try:
             tree.resolve(region_id)
@@ -137,7 +173,44 @@ class BoardService:
             msg = f'Region "{region_id}" not found on board {mural_id}.'
             raise board_exceptions.BoardRegionNotFoundError(msg) from exc
 
-        return self._renderer.render_subtree(tree, region_id)
+        return self._renderer.render_region_page(tree, region_id, offset=offset)
+
+    async def _load_area(
+        self, mural_id: str, area_id: str, access_token: str
+    ) -> nodes.WidgetTree | None:
+        """Build the tree of one area from targeted fetches.
+
+        Returns None when the region is not an area, or when fetching it piece
+        by piece would not be complete or cheaper; the caller then loads the
+        whole board.
+        """
+        try:
+            area = await self._fetch_widget(mural_id, area_id, access_token)
+        except board_exceptions.WidgetNotFoundError:
+            return None
+        if not isinstance(area, widget_schemas.AreaWidget):
+            return None
+
+        widgets: list[nodes.AnyWidget] = [area]
+        pending = [area.id]
+        fetches = 0
+        while pending:
+            if fetches >= _MAX_AREA_FETCHES:
+                return None
+            parent = pending.pop(0)
+            fetches += 1
+            raw = await self._fetch_widgets(mural_id, access_token, parent_id=parent)
+            children = parser.parse_widgets(raw)
+            # A table's cells hang off its rows and columns, not its parent,
+            # so the area's own children don't carry them.
+            if any(isinstance(c, widget_schemas.TableWidget) for c in children):
+                return None
+            widgets += children
+            pending += [
+                c.id for c in children if isinstance(c, widget_schemas.AreaWidget)
+            ]
+
+        return parser.build_tree(widgets)
 
     async def fetch_connections(
         self, user_id: str, mural_id: str, widget_id: str
@@ -152,26 +225,43 @@ class BoardService:
         mural_id: str,
         query: str | None,
         widget_type: str | None,
-    ) -> str:
-        """Return MSX leaf nodes for widgets matching query and/or type."""
-        parsed, tree = await self._load(user_id, mural_id)
+        offset: int = 0,
+    ) -> tuple[str, paging.Page]:
+        """Return MSX for part of the widgets matching query and/or type.
 
-        matches: list[nodes.AnyWidget] = []
+        A type the API can filter on is fetched on its own instead of the
+        whole board.
+        """
+        type_filter = _TYPE_FILTERS.get(widget_type) if widget_type else None
+        if type_filter:
+            await self._guard.check(user_id, mural_id)
+            access_token = await self._oauth.get_valid_token(user_id)
+            raw = await self._fetch_widgets(mural_id, access_token, types=[type_filter])
+            parsed = parser.parse_widgets(raw)
+            tree = parser.build_tree(parsed)
+        else:
+            parsed, tree = await self._load(user_id, mural_id)
+
         needle = query.lower() if query else None
+        matches: list[str] = []
 
         for widget in parsed:
             if widget_type and widget.type != widget_type:
+                continue
+            if not msx_renderer.is_shown(widget):
                 continue
             if needle:
                 fields = _widget_text_fields(widget)
                 if not any(needle in f.lower() for f in fields):
                     continue
-            matches.append(widget)
+            matches.append(widget.id)
 
         if not matches:
-            return "No widgets matched."
+            return "No widgets matched.", paging.Page(
+                shown=0, total=0, offset=0, next_offset=None
+            )
 
-        return self._renderer.render_widgets((w.id for w in matches), tree)
+        return self._renderer.render_widgets(matches, tree, offset=offset)
 
     def _widgets_url(self, mural_id: str) -> str:
         api_base = self._config.mural_config.api_base.rstrip("/")
@@ -196,15 +286,28 @@ class BoardService:
         return response.json()
 
     async def _fetch_widgets(
-        self, mural_id: str, access_token: str
+        self,
+        mural_id: str,
+        access_token: str,
+        *,
+        types: list[str] | None = None,
+        parent_id: str | None = None,
     ) -> list[dict[str, Any]]:
+        """Fetch every page of a board's widgets, optionally filtered by the API."""
         base_url = self._widgets_url(mural_id)
+        # The API needs the same filters again alongside each `next` token.
+        filters = {"limit": _PAGE_LIMIT}
+        if types:
+            filters["type"] = ",".join(types)
+        if parent_id:
+            filters["parentId"] = parent_id
+
         url: str | None = base_url
-        next_params: dict[str, str] | None = None
+        params: dict[str, str] | None = filters
         all_widgets: list[dict[str, Any]] = []
 
         while url:
-            data = await self._get_json(url, next_params, access_token)
+            data = await self._get_json(url, params, access_token)
 
             page = data.get("value", data) if isinstance(data, dict) else data
             all_widgets.extend(page)
@@ -215,6 +318,8 @@ class BoardService:
                 break
 
             url, next_params = resolved
+            # An absolute next URL already carries everything it needs.
+            params = {**filters, **next_params} if next_params is not None else None
 
         return all_widgets
 
@@ -230,7 +335,14 @@ class BoardService:
                 raise board_exceptions.WidgetNotFoundError(msg) from exc
             raise
 
-        payload = data["value"] if isinstance(data.get("value"), dict) else data
+        payload = (
+            data["value"]
+            if isinstance(data, dict) and isinstance(data.get("value"), dict)
+            else data
+        )
+        if not isinstance(payload, dict) or "id" not in payload:
+            msg = f'Widget "{widget_id}" not found on board {mural_id}.'
+            raise board_exceptions.WidgetNotFoundError(msg)
         return parser.parse_widgets([payload])[0]
 
     @staticmethod
