@@ -12,7 +12,7 @@ import pydantic
 
 from app.integration.mural.board.parsing import schemas as widgets
 
-AnyWidget = Annotated[
+KnownWidget = Annotated[
     widgets.StickyNoteWidget
     | widgets.ShapeWidget
     | widgets.TextWidget
@@ -26,6 +26,10 @@ AnyWidget = Annotated[
     | widgets.FileWidget,
     pydantic.Field(discriminator="type"),
 ]
+
+# UnknownWidget sits outside the discriminated union: it is the fallback for
+# anything the union can't read, so it has no type literal to discriminate on.
+AnyWidget = KnownWidget | widgets.UnknownWidget
 
 
 @dataclasses.dataclass(frozen=True)

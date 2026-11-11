@@ -2,6 +2,7 @@ import pytest
 
 from app.integration.mural.board.parsing import errors, parser
 from app.integration.mural.board.parsing import schemas as widgets
+from tests.fixtures import mural
 
 
 class TestParseWidgets:
@@ -124,30 +125,47 @@ class TestParseWidgets:
         assert isinstance(parsed[0], widgets.ShapeWidget)
         assert isinstance(parsed[1], widgets.IconWidget)
 
-    def test_unknown_widget_type_fails(self) -> None:
-        raw = {
-            "id": "unknown-1",
-            "type": "unknown_widget_type",
-            "x": 0,
-            "y": 0,
-            "width": 100,
-            "height": 100,
-            "rotation": 0,
-            "stackingOrder": 0,
-            "presentationIndex": -1,
-            "instruction": "",
-            "hidden": False,
-            "hideEditor": False,
-            "hideOwner": False,
-            "invisible": False,
-            "locked": False,
-            "lockedByFacilitator": False,
-            "createdBy": {"id": "user1"},
-            "createdOn": 1234567890,
-            "updatedBy": {"id": "user1"},
-            "updatedOn": 1234567890,
-            "contentEditedBy": {"id": "user1"},
-            "contentEditedOn": 1234567890,
-        }
+    def test_unknown_widget_type_becomes_an_unknown_widget(self) -> None:
+        raw = mural.base_widget("unknown-1", "drawing", parentId="area-1", x=5.0)
+        parsed = parser.parse_widgets([raw])
+        assert len(parsed) == 1
+        assert isinstance(parsed[0], widgets.UnknownWidget)
+        assert parsed[0].type == "drawing"
+        assert parsed[0].parent_id == "area-1"
+        assert parsed[0].x == 5.0
+
+    def test_known_type_with_a_bad_field_becomes_an_unknown_widget(self) -> None:
+        raw = mural.sticky("s1", text="hi")
+        del raw["style"]
+        parsed = parser.parse_widgets([raw])
+        assert isinstance(parsed[0], widgets.UnknownWidget)
+        assert parsed[0].type == "sticky note"
+
+    def test_a_bad_widget_does_not_stop_the_rest_of_the_board(self) -> None:
+        parsed = parser.parse_widgets(
+            [mural.sticky("s1"), {"id": "x", "type": "drawing"}, mural.sticky("s2")]
+        )
+        assert [type(w) for w in parsed] == [
+            widgets.StickyNoteWidget,
+            widgets.UnknownWidget,
+            widgets.StickyNoteWidget,
+        ]
+
+    def test_malformed_geometry_keeps_the_widget_by_identity(self) -> None:
+        raw = {"id": "w1", "type": "drawing", "x": "not a number"}
+        parsed = parser.parse_widgets([raw])
+        assert isinstance(parsed[0], widgets.UnknownWidget)
+        assert parsed[0].id == "w1"
+        assert parsed[0].x == 0.0
+
+    def test_a_widget_with_no_id_raises(self) -> None:
         with pytest.raises(errors.BoardParseError):
+            parser.parse_widgets([{"type": "sticky note"}])
+
+    def test_the_failure_log_names_fields_but_not_content(self, caplog) -> None:
+        raw = mural.sticky("s1", text="secret words")
+        del raw["style"]
+        with caplog.at_level("WARNING"):
             parser.parse_widgets([raw])
+        assert "style" in caplog.text
+        assert "secret words" not in caplog.text

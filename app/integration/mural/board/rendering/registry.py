@@ -3,6 +3,7 @@ from typing import Any
 
 from app.integration.mural.board.parsing import models
 from app.integration.mural.board.parsing import schemas as widgets
+from app.integration.mural.board.rendering import text
 
 type AttrExtractor = Callable[[Any], dict[str, str]]
 type ContentExtractor = Callable[[Any], str | None]
@@ -56,6 +57,12 @@ def _font_size_to_role(font_size: float) -> str:
     return "caption"
 
 
+def _rich_text(node: widgets.StickyNoteWidget | widgets.ShapeWidget) -> str | None:
+    """Plain text of a widget's content, preferring its rich text."""
+    from_html = text.html_to_text(node.html_text) if node.html_text else ""
+    return from_html or node.text or None
+
+
 def build_default_registry() -> WidgetRendererRegistry:
     reg = WidgetRendererRegistry()
 
@@ -102,6 +109,12 @@ def build_default_registry() -> WidgetRendererRegistry:
     )
 
     reg.register(
+        widgets.UnknownWidget,
+        tag="Widget",
+        attrs=lambda n: {"id": n.id, "type": n.type},
+    )
+
+    reg.register(
         widgets.StickyNoteWidget,
         tag="StickyNote",
         attrs=lambda n: {
@@ -112,7 +125,7 @@ def build_default_registry() -> WidgetRendererRegistry:
             **({"tags": ",".join(n.tags)} if n.tags else {}),
             **({"rotation": str(n.rotation)} if n.rotation else {}),
         },
-        content=lambda n: n.html_text or n.text or None,
+        content=_rich_text,
     )
 
     reg.register(
@@ -129,7 +142,7 @@ def build_default_registry() -> WidgetRendererRegistry:
             "role": _font_size_to_role(n.style.font_size),
             **({"rotation": str(n.rotation)} if n.rotation else {}),
         },
-        content=lambda n: n.html_text or n.text or None,
+        content=_rich_text,
     )
 
     reg.register(
