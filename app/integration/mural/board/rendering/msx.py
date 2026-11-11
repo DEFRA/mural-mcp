@@ -14,6 +14,11 @@ def format_attrs(attrs: dict[str, str]) -> str:
     return "".join(f' {k}="{html.escape(v, quote=True)}"' for k, v in attrs.items())
 
 
+def _is_shown(node: models.AnyNode) -> bool:
+    """Hidden and invisible widgets are not on the board as people see it."""
+    return not (getattr(node, "hidden", False) or getattr(node, "invisible", False))
+
+
 def render_subtree(
     tree: models.WidgetTree,
     root_id: str,
@@ -39,10 +44,14 @@ def _render_node(
     indent: int,
 ) -> list[str]:
     node = tree.resolve(node_id)
+    if not _is_shown(node):
+        return []
     tag = reg.get_tag_name(node)
     attr_str = format_attrs(reg.get_attrs(node))
 
-    child_ids = tree.adjacency.get(node_id, [])
+    child_ids = [
+        cid for cid in tree.adjacency.get(node_id, []) if _is_shown(tree.resolve(cid))
+    ]
     content = reg.get_content(node)
     prefix = _INDENT * indent
 

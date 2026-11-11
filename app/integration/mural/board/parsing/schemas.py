@@ -243,6 +243,19 @@ class AreaWidget(Widget):
     style: AreaStyle
 
 
+class ImageMask(pydantic.BaseModel):
+    """Crop window of an image, offset from its upper-left corner."""
+
+    model_config = pydantic.ConfigDict(
+        alias_generator=pydantic.alias_generators.to_camel, populate_by_name=True
+    )
+
+    top: float
+    left: float
+    width: float
+    height: float
+
+
 class ImageWidget(Widget):
     type: Literal["image"]
     border: bool
@@ -256,7 +269,7 @@ class ImageWidget(Widget):
     url: str | None
     aspect_ratio: float | None = None
     link: str | None = None
-    mask: dict[str, object] | None = None
+    mask: ImageMask | None = None
 
 
 class TableColumn(pydantic.BaseModel):
