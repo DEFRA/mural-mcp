@@ -5,11 +5,11 @@ description = "mural-mcp"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "authlib==1.9.3",
+    "authlib==1.9.5",
     "asgi-logger==0.1.0",
     "cryptography==50.0.2",
     "dishka==1.10.1",
-    "dnspython==2.9.1",
+    "dnspython==2.9.2",
     "ecs-logging==2.3.0",
     "fastapi==0.162.0",
     "fastmcp==4.1.6",
@@ -26,10 +26,10 @@ dependencies = [
 dev = [
     "mypy==2.4.1",
     "pytest==9.2.0",
-    "pytest-asyncio==1.4.1",
+    "pytest-asyncio==1.4.1.post1",
     "pytest-cov==7.1.0",
     "pytest-mock==3.17.0",
-    "ruff==0.17.3",
+    "ruff==0.17.4",
     "taskipy==1.14.1",
     "testcontainers==4.15.0",
     "vcrpy==9.4.2",
